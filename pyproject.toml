@@ -1,0 +1,13 @@
+[project]
+name = "preventmaker"
+version = "0.1.0"
+description = "Una semplice interfaccia grafica per poter creare preventivi velocemente e facilmente"
+requires-python = ">=3.12"
+dependencies = [
+    "pyqt6",
+    "reportlab",
+    "pypdf2",
+    "pyqt6-webengine",
+    "mysql-connector-python",
+    "pyinstaller",
+]
