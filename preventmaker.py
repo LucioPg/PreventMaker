@@ -565,16 +565,18 @@ class CustomerConfigWizard(QWizard):
 
         self.customer_page = CustomerPage()
         self.addPage(self.customer_page)
+        if self.config_name:
+            self.load_config(self.config_name)
         self.finished.connect(self.on_finish)
 
     def load_config(self, name):
         config = load_customer_configuration(name)
         if config:
-            self.customer_page.customer_name.setText(config["name"])
-            self.customer_page.customer_address.setText(config["address"])
-            self.customer_page.customer_vat.setText(config["vat_code"])
-            self.customer_page.customer_email.setText(config["email"])
-            self.customer_page.customer_phone.setText(config["phone"])
+            self.customer_page.customer_name.setText(config.get("customer_name", ""))
+            self.customer_page.customer_address.setText(config.get("customer_address", ""))
+            self.customer_page.customer_vat.setText(config.get("customer_vat", ""))
+            self.customer_page.customer_email.setText(config.get("customer_email", ""))
+            self.customer_page.customer_phone.setText(config.get("customer_phone", ""))
 
     def get_config(self):
         return {
@@ -819,6 +821,10 @@ class CustomerConfigManagerDialog(QDialog):
         self.rename_button = QPushButton("Rinomina")
         self.rename_button.clicked.connect(self.rename_configuration)
 
+        self.modify_button = QPushButton("Modifica")
+        self.modify_button.setStyleSheet("background-color: #DAA520;")
+        self.modify_button.clicked.connect(self.modify_configuration)
+
         self.delete_button = QPushButton("Elimina")
         self.delete_button.clicked.connect(self.delete_configuration)
 
@@ -831,6 +837,7 @@ class CustomerConfigManagerDialog(QDialog):
         buttons_layout.addWidget(self.new_button)
         buttons_layout.addWidget(self.rename_button)
         buttons_layout.addWidget(self.delete_button)
+        buttons_layout.addWidget(self.modify_button)
         buttons_layout.addStretch()
         buttons_layout.addWidget(self.load_button)
         buttons_layout.addWidget(self.cancel_button)
@@ -934,6 +941,27 @@ class CustomerConfigManagerDialog(QDialog):
         if reply == QMessageBox.StandardButton.Yes:
             if delete_customer_configuration(name):
                 self.load_configurations()
+
+    def modify_configuration(self):
+        """Modifica una configurazione cliente"""
+        current_item = self.config_list.currentItem()
+        if not current_item:
+            QMessageBox.warning(
+                self, "Nessuna Selezione",
+                "Selecta una configurazione cliente da modificar."
+            )
+            return
+        name = self.get_selected_configuration()
+        wizard = CustomerConfigWizard(self, name)
+
+        if wizard.exec():
+            self.load_configurations()
+
+            # Seleziona la nuova configurazione
+            items = self.config_list.findItems(name, Qt.MatchFlag.MatchExactly)
+            if items:
+                self.config_list.setCurrentItem(items[0])
+
 
     def get_selected_configuration(self):
         """Restituisce il nome della configurazione cliente selezionata"""
