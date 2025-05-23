@@ -105,23 +105,23 @@ def delete_configuration(name):
         conn.close()
 
 
-def save_client_configuration(name, config):
+def save_customer_configuration(name, config):
     """Salva una configurazione cliente nel database"""
     conn = sqlite3.connect(DB_FILE_NAME)
     cursor = conn.cursor()
 
     try:
         cursor.execute('''
-        INSERT OR REPLACE INTO client_configurations 
-        (name, client_name, client_address, client_phone, client_email, client_vat)
+        INSERT OR REPLACE INTO customer_configurations 
+        (name, customer_name, customer_address, customer_phone, customer_email, customer_vat)
         VALUES (?, ?, ?, ?, ?, ?)
         ''', (
             name,
-            config.get('client_name', ''),
-            config.get('client_address', ''),
-            config.get('client_phone', ''),
-            config.get('client_email', ''),
-            config.get('client_vat', '')
+            config.get('customer_name', ''),
+            config.get('customer_address', ''),
+            config.get('customer_phone', ''),
+            config.get('customer_email', ''),
+            config.get('customer_vat', '')
         ))
 
         conn.commit()
@@ -133,26 +133,26 @@ def save_client_configuration(name, config):
         conn.close()
 
 
-def load_client_configuration(name):
+def load_customer_configuration(name):
     """Carica una configurazione cliente dal database"""
     conn = sqlite3.connect(DB_FILE_NAME)
     cursor = conn.cursor()
 
     try:
         cursor.execute('''
-        SELECT client_name, client_address, client_phone, client_email, client_vat
-        FROM client_configurations
+        SELECT customer_name, customer_address, customer_phone, customer_email, customer_vat
+        FROM customer_configurations
         WHERE name = ?
         ''', (name,))
 
         row = cursor.fetchone()
         if row:
             config = {
-                'client_name': row[0],
-                'client_address': row[1],
-                'client_phone': row[2],
-                'client_email': row[3],
-                'client_vat': row[4]
+                'customer_name': row[0],
+                'customer_address': row[1],
+                'customer_phone': row[2],
+                'customer_email': row[3],
+                'customer_vat': row[4]
             }
             return config
         return None
@@ -163,13 +163,13 @@ def load_client_configuration(name):
         conn.close()
 
 
-def get_client_configuration_names():
+def get_customer_configuration_names():
     """Restituisce la lista dei nomi delle configurazioni cliente salvate"""
     conn = sqlite3.connect(DB_FILE_NAME)
     cursor = conn.cursor()
 
     try:
-        cursor.execute('SELECT name FROM client_configurations ORDER BY name')
+        cursor.execute('SELECT name FROM customer_configurations ORDER BY name')
         names = [row[0] for row in cursor.fetchall()]
         return names
     except Exception as e:
@@ -179,13 +179,13 @@ def get_client_configuration_names():
         conn.close()
 
 
-def delete_client_configuration(name):
+def delete_customer_configuration(name):
     """Elimina una configurazione cliente dal database"""
     conn = sqlite3.connect(DB_FILE_NAME)
     cursor = conn.cursor()
 
     try:
-        cursor.execute('DELETE FROM client_configurations WHERE name = ?', (name,))
+        cursor.execute('DELETE FROM customer_configurations WHERE name = ?', (name,))
         conn.commit()
         return True
     except Exception as e:
@@ -232,14 +232,14 @@ def init_db():
 
     # Crea la tabella delle configurazioni cliente se non esiste
     cursor.execute('''
-    CREATE TABLE IF NOT EXISTS client_configurations (
+    CREATE TABLE IF NOT EXISTS customer_configurations (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         name TEXT UNIQUE NOT NULL,
-        client_name TEXT NOT NULL,
-        client_address TEXT,
-        client_phone TEXT,
-        client_email TEXT NOT NULL,
-        client_vat TEXT
+        customer_name TEXT NOT NULL,
+        customer_address TEXT,
+        customer_phone TEXT,
+        customer_email TEXT NOT NULL,
+        customer_vat TEXT
     )
     ''')
 

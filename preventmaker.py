@@ -19,13 +19,13 @@ import tempfile
 
 from custom_events import ConfigReadyEvent
 from utils import save_configuration, load_configuration, get_configuration_names, delete_configuration, \
-    save_client_configuration, load_client_configuration, get_client_configuration_names, delete_client_configuration, \
+    save_customer_configuration, load_customer_configuration, get_customer_configuration_names, delete_customer_configuration, \
     delete_database, init_db, is_valid_email, is_valid_vat, is_valid_phone
 
 from constants import *
 
 
-def getText_with_icon(self, title, label, icon_path=None, default_text=""):
+def dialog_with_icon(self, title, label, icon_path=None, default_text=""):
     """
     Versione personalizzata di QInputDialog.getText() che supporta l'impostazione di un'icona
 
@@ -46,8 +46,8 @@ def getText_with_icon(self, title, label, icon_path=None, default_text=""):
     if icon_path:
         dialog.setWindowIcon(QIcon(icon_path))
 
-    ok = dialog.exec() == QInputDialog.accepted
-    return dialog.textValue(), ok
+    # ok = dialog.exec() == QInputDialog.accepted
+    return dialog
 
 
 class CompanyConfigWizard(QWizard):
@@ -568,7 +568,7 @@ class CustomerConfigWizard(QWizard):
         self.finished.connect(self.on_finish)
 
     def load_config(self, name):
-        config = load_client_configuration(name)
+        config = load_customer_configuration(name)
         if config:
             self.customer_page.customer_name.setText(config["name"])
             self.customer_page.customer_address.setText(config["address"])
@@ -594,7 +594,7 @@ class CustomerConfigWizard(QWizard):
         config = self.get_config()
         if config and self.customer_page.isComplete():
             # Salva la configurazione
-            save_client_configuration(self.config_name, config)
+            save_customer_configuration(self.config_name, config)
             QMessageBox.information(self, "Salvataggio", "La configurazione Cliente è stata salvata.")
         else:
             QMessageBox.warning(self, "Errore", "Impossibile salvare la configurazione Cliente.")
@@ -667,11 +667,13 @@ class ConfigManagerDialog(QDialog):
 
     def new_configuration(self):
         """Crea una nuova configurazione"""
-        name, ok = getText_with_icon(
+        dialog = dialog_with_icon(
             self, "Nuova Configurazione", "Nome della configurazione:", COMPANY_ICON_PATH
         )
-
-        if ok and name.strip():
+        name = None
+        if dialog.exec():
+            name = dialog.textValue().strip()
+        if name:
             # Verifica se il nome esiste già
             existing_names = get_configuration_names()
             if name in existing_names:
@@ -702,12 +704,14 @@ class ConfigManagerDialog(QDialog):
             return
 
         old_name = current_item.text()
-        new_name, ok = getText_with_icon(
+        dialog = dialog_with_icon(
             self, "Rinomina Configurazione",
             "Nuovo nome:", icon_path=COMPANY_ICON_PATH, default_text=old_name
         )
-
-        if ok and new_name.strip() and new_name != old_name:
+        new_name = None
+        if dialog.exec():
+            name = dialog.textValue().strip()
+        if new_name and new_name != old_name:
             # Verifica se il nuovo nome esiste già
             existing_names = get_configuration_names()
             if new_name in existing_names:
@@ -841,16 +845,19 @@ class CustomerConfigManagerDialog(QDialog):
     def load_configurations(self):
         """Carica la lista delle configurazioni dal database"""
         self.config_list.clear()
-        names = get_client_configuration_names()
+        names = get_customer_configuration_names()
         for name in names:
             self.config_list.addItem(name)
 
     def new_configuration(self):
         """Crea una nuova configurazione cliente"""
-        name, ok = getText_with_icon(self, "Nuovo Cliente", "Nome configurazione:", CUSTOMER_ICON_PATH)
-        if ok and name.strip():
+        dialog = dialog_with_icon(self, "Nuovo Cliente", "Nome configurazione:", CUSTOMER_ICON_PATH)
+        name = None
+        if dialog.exec():
+            name = dialog.textValue().strip()
+        if name:
             # Verifica se il nome esiste già
-            existing_names = get_client_configuration_names()
+            existing_names = get_customer_configuration_names()
             if name in existing_names:
                 QMessageBox.warning(
                     self, "Nome Duplicato",
@@ -878,12 +885,14 @@ class CustomerConfigManagerDialog(QDialog):
             return
 
         old_name = current_item.text()
-        new_name, ok = getText_with_icon(self, "Rinomina Configurazione Cliente", "Nuovo nome:",
+        dialog = dialog_with_icon(self, "Rinomina Configurazione Cliente", "Nuovo nome:",
                                          icon_path=CUSTOMER_ICON_PATH, default_text=old_name)
-
-        if ok and new_name.strip() and new_name != old_name:
+        new_name = None
+        if dialog.exec():
+            new_name = dialog.textValue().strip()
+        if new_name and new_name != old_name:
             # Verifica se il nuovo nome esiste già
-            existing_names = get_client_configuration_names()
+            existing_names = get_customer_configuration_names()
             if new_name in existing_names:
                 QMessageBox.warning(
                     self, "Nome Duplicato",
@@ -892,12 +901,12 @@ class CustomerConfigManagerDialog(QDialog):
                 return
 
             # Carica la configurazione esistente
-            config = load_client_configuration(old_name)
+            config = load_customer_configuration(old_name)
             if config:
                 # Salva con il nuovo nome
-                if save_client_configuration(new_name, config):
+                if save_customer_configuration(new_name, config):
                     # Elimina la vecchia configurazione
-                    delete_client_configuration(old_name)
+                    delete_customer_configuration(old_name)
                     self.load_configurations()
 
                     # Seleziona la configurazione rinominata
@@ -923,7 +932,7 @@ class CustomerConfigManagerDialog(QDialog):
         )
 
         if reply == QMessageBox.StandardButton.Yes:
-            if delete_client_configuration(name):
+            if delete_customer_configuration(name):
                 self.load_configurations()
 
     def get_selected_configuration(self):
@@ -1183,7 +1192,7 @@ class PreventMaker(QMainWindow):
 
     def loadClientConfiguration(self, name):
         """Carica una configurazione cliente dal database"""
-        client_config = load_client_configuration(name)
+        client_config = load_customer_configuration(name)
         if client_config:
             # Aggiorna la configurazione cliente corrente
             self.customer_config = client_config
@@ -1196,10 +1205,14 @@ class PreventMaker(QMainWindow):
     def saveConfiguration(self, name=None):
         """Salva la configurazione corrente nel database"""
         if not name and not self.current_config_name:
-            name, ok = getText_with_icon(
+            dialog = dialog_with_icon(
                 self, "Salva Configurazione", "Nome della configurazione:", COMPANY_ICON_PATH
             )
-            if not (ok and name.strip()):
+            name = None
+            if dialog.exec():
+                name = dialog.textValue().strip()
+            else: return False
+            if not name:
                 return False
 
         config_name = name or self.current_config_name
