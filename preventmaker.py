@@ -42,7 +42,6 @@ def getText_with_icon(self, title, label, icon_path=None, default_text=""):
     dialog.setWindowTitle(title)
     dialog.setLabelText(label)
     dialog.setTextValue(default_text)
-    # dialog.setInputMode(QInputDialog.TextInput)
 
     if icon_path:
         dialog.setWindowIcon(QIcon(icon_path))
@@ -67,12 +66,10 @@ class CompanyConfigWizard(QWizard):
 
         # Aggiungi le pagine del wizard
         self.company_page = CompanyPage()
-        # self.client_page = ClientPage()
         self.terms_page = TermsPage()
 
         self.addPage(self.company_page)
         self.addPage(self.terms_page)
-        # self.addPage(self.client_page)
 
         # Se è stata specificata una configurazione, caricala
         if config_name:
@@ -125,35 +122,12 @@ class CompanyConfigWizard(QWizard):
             'company_email': self.field('company_email'),
             'company_vat': self.field('company_vat'),
             'company_logo': self.field('company_logo'),
-
-            # # Dati cliente
-            # 'client_name': self.field('client_name'),
-            # 'client_address': self.field('client_address'),
-            # 'client_phone': self.field('client_phone'),
-            # 'client_email': self.field('client_email'),
-            # 'client_vat': self.field('client_vat'),
-
             # Termini e condizioni
             'terms': self.field('terms'),
             'vat_rate': self.field('vat_rate'),
             'notes': self.field('notes'),
             'prepared_by': self.field('prepared_by')
         }
-
-        # Se c'è un nome di configurazione, salva la configurazione # non dovrebbe essere qui
-        # if hasattr(self, 'config_name') and self.config_name:
-        #     save_configuration(self.config_name, {
-        #         'company_name': config['company_name'],
-        #         'company_address': config['company_address'],
-        #         'company_phone': config['company_phone'],
-        #         'company_email': config['company_email'],
-        #         'company_vat': config['company_vat'],
-        #         'company_logo': config['company_logo'],
-        #         'terms': config['terms'],
-        #         'vat_rate': config['vat_rate'],
-        #         'notes': config['notes'],
-        #         'prepared_by': config['prepared_by']
-        #     })
 
         return config
 
@@ -634,6 +608,7 @@ class ConfigManagerDialog(QDialog):
         self.setWindowTitle("Gestione Configurazioni - PreventMaker")
         self.setMinimumSize(500, 400)
         self.setWindowModality(Qt.WindowModality.ApplicationModal)
+        self.setWindowIcon(QIcon(COMPANY_ICON_PATH))
         # Inizializza il database
         init_db()
 
@@ -872,9 +847,6 @@ class CustomerConfigManagerDialog(QDialog):
 
     def new_configuration(self):
         """Crea una nuova configurazione cliente"""
-        # name, ok = QInputDialog.getText(
-        #     self, "Nuovo Cliente", "Nome della configurazione:"
-        # )
         name, ok = getText_with_icon(self, "Nuovo Cliente", "Nome configurazione:", CUSTOMER_ICON_PATH)
         if ok and name.strip():
             # Verifica se il nome esiste già
@@ -1015,27 +987,12 @@ class PreventMaker(QMainWindow):
         # Crea un timer che si attiva dopo un breve ritardo (es. 100 ms)
         self.closing_timer = QTimer()  # altrimenti l'applicazione non si chiude correttamente
         self.closing_timer.setSingleShot(True)  # Esegue l'azione una sola volta
-        # timer.timeout.connect(lambda: sys.exit(0))
         self.closing_timer.timeout.connect(lambda: QApplication.instance().quit())
         # Carica le impostazioni
         self.settings = QSettings("PreventMaker", "PreventMaker")
         self.loadSettings()
         self.company_config_is_present = False
         self.customer_config_is_present = False
-
-        # # Chiedi la configurazione all'avvio
-        # if not self.showConfigManager():
-        #     # Se l'utente ha annullato, chiudi l'applicazione
-        #     self.close()
-        #     self.chiudi_app_con_timer() # altrimenti l'applicazione non si chiude correttamente
-        #
-        #     return
-        #
-        # has_customer = False
-        # while not has_customer:
-        #     # Chiedi la configurazione del cliente
-        #     has_customer =self.showClientConfigManager()
-
         # Connetti l'evento di ridimensionamento della finestra
         self.installEventFilter(self)
 
@@ -1657,7 +1614,6 @@ class PreventMaker(QMainWindow):
                 self.product_table.parent_resized = True
         elif event.type() == ConfigReadyEvent.EVENT_TYPE and obj == self:
             if self.config_is_ready:
-                # self.show()
                 self.setVisible(True)
                 return True
         return super().eventFilter(obj, event)
@@ -1761,6 +1717,8 @@ def main():
             font-weight: bold;
         }
     """)
+    app_icon = QIcon("./icons/PreventMaker.ico")  # Formato .ico per Windows
+    app.setWindowIcon(app_icon)
 
     # Crea e mostra lo splash screen
     splash_pixmap = QPixmap("./icons/PreventMaker_logo.png")  # Sostituisci con il percorso del tuo logo
