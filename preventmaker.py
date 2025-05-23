@@ -1,5 +1,6 @@
 import sys
 import os
+from enum import Enum
 from functools import partial
 from PyQt6.QtGui import QIcon, QPixmap
 from PyQt6.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
@@ -377,6 +378,24 @@ class TermsPage(QWizardPage):
         return self.prepared_by.text().strip() != ""
 
 
+class ProductTableWidgetColumn(Enum):
+    CODE_ITEM = 0
+    DESCRIPTION = 1
+    QNT = 2
+    PRICE = 3
+    DISCOUNT = 4
+    VAT = 5
+    NET = 6
+
+class ProductTableWidget(Enum):
+    CODE_ITEM = QTableWidgetItem
+    DESCRIPTION = QTableWidgetItem
+    QNT = QSpinBox
+    PRICE = QDoubleSpinBox
+    DISCOUNT = QDoubleSpinBox
+    VAT = QComboBox
+    NET = QTableWidgetItem
+
 class ProductTable(QTableWidget):
     """Tabella per i prodotti del preventivo"""
 
@@ -466,47 +485,47 @@ class ProductTable(QTableWidget):
 
         # Crea gli elementi della riga
         # Codice articolo (default: numero riga + 1)
-        code_item = QTableWidgetItem(str(row + 1))
+        code_item = ProductTableWidget.CODE_ITEM.value(str(row + 1))
 
-        desc_item = QTableWidgetItem("")
+        desc_item = ProductTableWidget.DESCRIPTION.value("")
 
         # Usa spinbox per quantità
-        qty_spin = QSpinBox()
+        qty_spin = ProductTableWidget.QNT.value() # QSpinBox()
         qty_spin.setRange(1, 9999)
         qty_spin.setValue(1)
         qty_spin.valueChanged.connect(self.updateTotals)
 
         # Usa doublespinbox per prezzo unitario
-        price_spin = QDoubleSpinBox()
+        price_spin = ProductTableWidget.PRICE.value() # QDoubleSpinBox()
         price_spin.setRange(0, 999999.99)
-        price_spin.setDecimals(2)
+        price_spin.setDecimals(4)
         price_spin.setSuffix(" €")
         price_spin.valueChanged.connect(self.updateTotals)
 
         # Usa doublespinbox per sconto
-        discount_spin = QDoubleSpinBox()
+        discount_spin = ProductTableWidget.DISCOUNT.value() # QDoubleSpinBox()
         discount_spin.setRange(0, 100)
         discount_spin.setDecimals(2)
         discount_spin.setSuffix(" %")
         discount_spin.valueChanged.connect(self.updateTotals)
 
         # Usa combobox per IVA
-        vat_combo = QComboBox()
+        vat_combo = ProductTableWidget.VAT.value() # QComboBox()
         vat_combo.addItems(["22", "10", "4", "0"])
         vat_combo.currentTextChanged.connect(self.updateTotals)
 
         # Totale netto (calcolato)
-        total_item = QTableWidgetItem("0.00 €")
+        total_item = ProductTableWidget.NET.value("0.00 €")
         total_item.setFlags(total_item.flags() & ~Qt.ItemFlag.ItemIsEditable)
 
         # Imposta gli elementi nella riga
-        self.setItem(row, 0, code_item)
-        self.setItem(row, 1, desc_item)
-        self.setCellWidget(row, 2, qty_spin)
-        self.setCellWidget(row, 3, price_spin)
-        self.setCellWidget(row, 4, discount_spin)
-        self.setCellWidget(row, 5, vat_combo)
-        self.setItem(row, 6, total_item)
+        self.setItem(row, ProductTableWidgetColumn.CODE_ITEM.value, code_item)
+        self.setItem(row, ProductTableWidgetColumn.DESCRIPTION.value, desc_item)
+        self.setCellWidget(row, ProductTableWidgetColumn.QNT.value, qty_spin)
+        self.setCellWidget(row, ProductTableWidgetColumn.PRICE.value, price_spin)
+        self.setCellWidget(row, ProductTableWidgetColumn.DISCOUNT.value, discount_spin)
+        self.setCellWidget(row, ProductTableWidgetColumn.VAT.value, vat_combo)
+        self.setItem(row, ProductTableWidgetColumn.NET.value, total_item)
 
         return row
 
@@ -521,17 +540,20 @@ class ProductTable(QTableWidget):
         """Aggiorna i totali di ogni riga e il totale complessivo"""
         total_net = 0.0
         total_vat = 0.0
-
+        qnt_col = ProductTableWidgetColumn.QNT.value
+        price_col = ProductTableWidgetColumn.PRICE.value
+        discount_col = ProductTableWidgetColumn.DISCOUNT.value
+        vat_col = ProductTableWidgetColumn.VAT.value
+        net_col = ProductTableWidgetColumn.NET.value
         for row in range(self.rowCount()):
-            if isinstance(self.cellWidget(row, 1), QSpinBox) and \
-                    isinstance(self.cellWidget(row, 2), QDoubleSpinBox) and \
-                    isinstance(self.cellWidget(row, 3), QDoubleSpinBox) and \
-                    isinstance(self.cellWidget(row, 4), QComboBox):
-
-                qty = self.cellWidget(row, 1).value()
-                price = self.cellWidget(row, 2).value()
-                discount = self.cellWidget(row, 3).value() / 100.0
-                vat_rate = float(self.cellWidget(row, 4).currentText()) / 100.0
+            if isinstance(self.cellWidget(row, qnt_col), QSpinBox) and \
+                    isinstance(self.cellWidget(row, price_col), QDoubleSpinBox) and \
+                    isinstance(self.cellWidget(row, discount_col), QDoubleSpinBox) and \
+                    isinstance(self.cellWidget(row, vat_col), QComboBox):
+                qty = self.cellWidget(row, qnt_col).value()
+                price = self.cellWidget(row, price_col).value()
+                discount = self.cellWidget(row, discount_col).value() / 100.0
+                vat_rate = float(self.cellWidget(row, vat_col).currentText()) / 100.0
 
                 # Calcola il netto
                 net = qty * price * (1 - discount)
@@ -540,8 +562,8 @@ class ProductTable(QTableWidget):
                 vat = net * vat_rate
 
                 # Aggiorna il totale netto nella tabella
-                if self.item(row, 5):
-                    self.item(row, 5).setText(f"{net:.2f} €")
+                if self.item(row, net_col):
+                    self.item(row, net_col).setText(f"{net:.4f} €")
 
                 # Aggiorna i totali complessivi
                 total_net += net
