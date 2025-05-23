@@ -1463,7 +1463,7 @@ class PreventMaker(QMainWindow):
                 "Non è stata impostata alcuna configurazione per il cliente. Imposta una configurazione prima di procedere."
             )
             return False
-        return all([self.check_company_config_is_complete(self.config), self.check_customer_config_is_complete(self.config)])
+        return all([self.check_company_config_is_complete(self.config), self.check_customer_config_is_complete(self.customer_config)])
 
 
     def check_company_config_is_complete(self, config):
