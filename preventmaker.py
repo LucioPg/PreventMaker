@@ -6,8 +6,7 @@ from PyQt6.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout, QH
                              QLabel, QLineEdit, QTextEdit, QPushButton, QTableWidget,
                              QTableWidgetItem, QSpinBox, QDoubleSpinBox, QComboBox,
                              QFileDialog, QMessageBox, QWizard, QWizardPage, QFormLayout,
-                             QGroupBox, QDialog, QListWidget, QInputDialog, QHeaderView, QDialogButtonBox,
-                             QSplashScreen)
+                             QGroupBox, QDialog, QListWidget, QInputDialog, QHeaderView, QSplashScreen)
 from PyQt6.QtCore import Qt, QUrl, pyqtSignal, QSettings, QTimer
 from PyQt6.QtWebEngineWidgets import QWebEngineView
 from reportlab.lib.pagesizes import A4
@@ -19,8 +18,9 @@ import tempfile
 
 from custom_events import ConfigReadyEvent
 from utils import save_configuration, load_configuration, get_configuration_names, delete_configuration, \
-    save_customer_configuration, load_customer_configuration, get_customer_configuration_names, delete_customer_configuration, \
-    delete_database, init_db, is_valid_email, is_valid_vat, is_valid_phone
+    save_customer_configuration, load_customer_configuration, get_customer_configuration_names, \
+    delete_customer_configuration, \
+    delete_database, init_db, is_valid_email, is_valid_vat, is_valid_phone, _config_unchanged
 
 from constants import *
 
@@ -60,7 +60,13 @@ class CompanyConfigWizard(QWizard):
         self.setWindowIcon(QIcon(COMPANY_ICON_PATH))
         self.setWizardStyle(QWizard.WizardStyle.ModernStyle)
         self.config_name = config_name
-
+        self._old_config = {}
+        self._temp_config = {}
+        self.is_rejected = False
+        self.cancel_button = self.button(QWizard.WizardButton.CancelButton)
+        # disconnetto il comportamento predefinito e applico il mio override
+        self.cancel_button.disconnect()
+        self.cancel_button.clicked.connect(self.custom_cancel_callback)
         # Inizializza il database se necessario
         init_db()
 
@@ -78,12 +84,26 @@ class CompanyConfigWizard(QWizard):
         self.setMinimumSize(600, 400)
         self.finished.connect(self.on_finish)
 
+    def custom_cancel_callback(self):
+        """Override del metodo invocato alla pressione del tasto cancel. Per fare il controllo se la configurazione
+         non è stata modificata"""
+        self._temp_config = self.get_config()
+        self.is_rejected = True
+        # invoco il metodo predefinito
+        self.reject()
+
     def on_finish(self):
         """
         Salva la configurazione finale.
         :return:
         """
-        config = self.get_config()
+        if self.is_rejected:
+            return
+        config = self.get_config() if not self.is_rejected else self._temp_config
+        if _config_unchanged(config, self._old_config):
+            self.is_rejected = False
+            self._temp_config = {}
+            return
         if config and all(list(map(lambda page: page.isComplete(), [self.company_page, self.terms_page]))):
             # Salva la configurazione
             save_configuration(self.config_name, config)
@@ -111,6 +131,9 @@ class CompanyConfigWizard(QWizard):
                 self.terms_page.vat_rate.setCurrentIndex(index)
             self.terms_page.notes.setPlainText(config.get('notes', ''))
             self.terms_page.prepared_by.setText(config.get('prepared_by', ''))
+            self._old_config = config.copy()
+        else:
+            self._old_config = {}
 
     def get_config(self):
         """Restituisce la configurazione completa dal wizard"""

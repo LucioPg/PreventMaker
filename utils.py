@@ -1,3 +1,4 @@
+import json
 import os
 import re
 import sqlite3
@@ -275,3 +276,8 @@ def is_valid_phone(phone):
     # Verifica che la lunghezza sia ragionevole (tra 8 e 15 cifre)
     digits_only = re.sub(r'\D', '', phone_clean)
     return 8 <= len(digits_only) <= 15
+
+
+def _config_unchanged(config, old_config):
+    """Indica se le due configurazioni sono uguali"""
+    return json.dumps(config, indent=2, default=str) == json.dumps(old_config, indent=2, default=str)
