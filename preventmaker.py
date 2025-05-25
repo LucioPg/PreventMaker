@@ -1,11 +1,10 @@
 import sys
 import os
-from enum import Enum
 from functools import partial
 from PyQt6.QtGui import QIcon, QPixmap
 from PyQt6.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
                              QLabel, QLineEdit, QTextEdit, QPushButton, QTableWidget,
-                             QTableWidgetItem, QSpinBox, QDoubleSpinBox, QComboBox,
+                             QSpinBox, QDoubleSpinBox, QComboBox,
                              QFileDialog, QMessageBox, QWizard, QWizardPage, QFormLayout,
                              QGroupBox, QDialog, QListWidget, QInputDialog, QHeaderView, QSplashScreen)
 from PyQt6.QtCore import Qt, QUrl, pyqtSignal, QSettings, QTimer
@@ -18,10 +17,11 @@ from reportlab.lib.units import mm, cm
 import tempfile
 
 from custom_events import ConfigReadyEvent
+from products_enums import ProductTableWidgetColumn, ProductTableWidget, ProductTableJsonFieldsNames
 from utils import save_configuration, load_configuration, get_configuration_names, delete_configuration, \
     save_customer_configuration, load_customer_configuration, get_customer_configuration_names, \
     delete_customer_configuration, \
-    delete_database, init_db, is_valid_email, is_valid_vat, is_valid_phone, _config_unchanged
+    delete_database, init_db, is_valid_email, is_valid_vat, is_valid_phone, _config_unchanged, add_default_note
 
 from constants import *
 
@@ -106,6 +106,9 @@ class CompanyConfigWizard(QWizard):
             self._temp_config = {}
             return
         if config and all(list(map(lambda page: page.isComplete(), [self.company_page, self.terms_page]))):
+            # Aggiungi nota predefinita
+            config = add_default_note(config, config.get('company_name', ''), config.get('company_address', ''),
+                                      config.get('company_email', ''))
             # Salva la configurazione
             save_configuration(self.config_name, config)
             QMessageBox.information(self, "Salvataggio", "La configurazione è stata salvata.")
@@ -123,7 +126,8 @@ class CompanyConfigWizard(QWizard):
             self.company_page.company_email.setText(config.get('company_email', ''))
             self.company_page.company_vat.setText(config.get('company_vat', ''))
             self.company_page.logo_path.setText(config.get('company_logo', ''))
-
+            config = add_default_note(config, config.get('company_name', ''), config.get('company_address', ''),
+                                      config.get('company_email', ''))
             # Imposta i campi dei termini
             self.terms_page.terms.setPlainText(config.get('terms', ''))
             vat_rate = config.get('vat_rate', '22%')
@@ -378,24 +382,6 @@ class TermsPage(QWizardPage):
         return self.prepared_by.text().strip() != ""
 
 
-class ProductTableWidgetColumn(Enum):
-    CODE_ITEM = 0
-    DESCRIPTION = 1
-    QNT = 2
-    PRICE = 3
-    DISCOUNT = 4
-    VAT = 5
-    NET = 6
-
-class ProductTableWidget(Enum):
-    CODE_ITEM = QTableWidgetItem
-    DESCRIPTION = QTableWidgetItem
-    QNT = QSpinBox
-    PRICE = QDoubleSpinBox
-    DISCOUNT = QDoubleSpinBox
-    VAT = QComboBox
-    NET = QTableWidgetItem
-
 class ProductTable(QTableWidget):
     """Tabella per i prodotti del preventivo"""
 
@@ -490,27 +476,27 @@ class ProductTable(QTableWidget):
         desc_item = ProductTableWidget.DESCRIPTION.value("")
 
         # Usa spinbox per quantità
-        qty_spin = ProductTableWidget.QNT.value() # QSpinBox()
+        qty_spin = ProductTableWidget.QNT.value()  # QSpinBox()
         qty_spin.setRange(1, 9999)
         qty_spin.setValue(1)
         qty_spin.valueChanged.connect(self.updateTotals)
 
         # Usa doublespinbox per prezzo unitario
-        price_spin = ProductTableWidget.PRICE.value() # QDoubleSpinBox()
+        price_spin = ProductTableWidget.PRICE.value()  # QDoubleSpinBox()
         price_spin.setRange(0, 999999.99)
         price_spin.setDecimals(4)
         price_spin.setSuffix(" €")
         price_spin.valueChanged.connect(self.updateTotals)
 
         # Usa doublespinbox per sconto
-        discount_spin = ProductTableWidget.DISCOUNT.value() # QDoubleSpinBox()
+        discount_spin = ProductTableWidget.DISCOUNT.value()  # QDoubleSpinBox()
         discount_spin.setRange(0, 100)
         discount_spin.setDecimals(2)
         discount_spin.setSuffix(" %")
         discount_spin.valueChanged.connect(self.updateTotals)
 
         # Usa combobox per IVA
-        vat_combo = ProductTableWidget.VAT.value() # QComboBox()
+        vat_combo = ProductTableWidget.VAT.value()  # QComboBox()
         vat_combo.addItems(["22", "10", "4", "0"])
         vat_combo.currentTextChanged.connect(self.updateTotals)
 
@@ -938,7 +924,7 @@ class CustomerConfigManagerDialog(QDialog):
 
         old_name = current_item.text()
         dialog = dialog_with_icon(self, "Rinomina Configurazione Cliente", "Nuovo nome:",
-                                         icon_path=CUSTOMER_ICON_PATH, default_text=old_name)
+                                  icon_path=CUSTOMER_ICON_PATH, default_text=old_name)
         new_name = None
         if dialog.exec():
             new_name = dialog.textValue().strip()
@@ -1007,7 +993,6 @@ class CustomerConfigManagerDialog(QDialog):
             if items:
                 self.config_list.setCurrentItem(items[0])
 
-
     def get_selected_configuration(self):
         """Restituisce il nome della configurazione cliente selezionata"""
         current_item = self.config_list.currentItem()
@@ -1050,6 +1035,56 @@ class PDFPreviewDialog(QDialog):
         layout.addLayout(button_layout)
 
         self.setLayout(layout)
+
+
+class AddNoteDialog(QDialog):
+    def __init__(self, parent=None, current_note=""):
+        super().__init__(parent)
+        self.current_note = current_note
+        # Imposta il titolo della finestra
+        self.setWindowTitle("Aggiungi Nota")
+        self.setWindowModality(Qt.WindowModality.ApplicationModal)
+        # Imposta le dimensioni della finestra
+        self.resize(400, 300)
+
+        # Crea il layout principale
+        main_layout = QVBoxLayout()
+
+        # Aggiungi etichetta per il text box
+        label = QLabel("Inserisci il testo della nota:")
+        main_layout.addWidget(label)
+
+        # Crea il text box
+        self.text_edit = QTextEdit()
+        if current_note:
+            self.text_edit.setText(current_note)
+        main_layout.addWidget(self.text_edit)
+
+        # Crea il layout per i pulsanti
+        button_layout = QHBoxLayout()
+
+        # Crea i pulsanti
+        self.add_button = QPushButton("Aggiungi")
+        self.cancel_button = QPushButton("Annulla")
+
+        # Collega i pulsanti alle azioni
+        self.add_button.clicked.connect(self.accept)
+        self.cancel_button.clicked.connect(self.reject)
+
+        # Aggiungi i pulsanti al layout
+        button_layout.addStretch()
+        button_layout.addWidget(self.add_button)
+        button_layout.addWidget(self.cancel_button)
+
+        # Aggiungi il layout dei pulsanti al layout principale
+        main_layout.addLayout(button_layout)
+
+        # Imposta il layout principale
+        self.setLayout(main_layout)
+
+    def get_text(self):
+        """Restituisce il testo inserito nel text box"""
+        return self.text_edit.toPlainText().strip()
 
 
 class PreventMaker(QMainWindow):
@@ -1207,7 +1242,6 @@ class PreventMaker(QMainWindow):
         # Aggiungi un prodotto di default
         self.addProduct()
 
-
     def showConfigManager(self):
         """Mostra il gestore delle configurazioni"""
         dialog = ConfigManagerDialog(self)
@@ -1238,12 +1272,19 @@ class PreventMaker(QMainWindow):
         # Chiedi conferma prima di aggiungere la nota
         reply = QMessageBox.question(
             self, "Aggiungi Nota",
-            f"Vuoi aggiungere la seguente nota al preventivo?\n\n{self.config.get('notes')}",
+            f"Vuoi aggiungere / modificare la nota del preventivo?",
             QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
         )
 
         if reply == QMessageBox.StandardButton.Yes:
-            # Aggiungi la nota al preventivo (implementazione da definire in base alle esigenze) # todo!!!!!!!!!!!!!!!!!!!
+            # Aggiungi la nota al preventivo (implementazione da definire in base alle esigenze)
+            old_nota = self.config.get('notes')
+            note_dialog = AddNoteDialog(self, old_nota)
+            if note_dialog.exec():
+                new_note = note_dialog.get_text()
+                if new_note != old_nota:
+                    self.config['notes'] = new_note
+                    self.modified = True
             QMessageBox.information(
                 self, "Nota Aggiunta",
                 "La nota è stata aggiunta al preventivo."
@@ -1284,7 +1325,8 @@ class PreventMaker(QMainWindow):
             name = None
             if dialog.exec():
                 name = dialog.textValue().strip()
-            else: return False
+            else:
+                return False
             if not name:
                 return False
 
@@ -1536,8 +1578,8 @@ class PreventMaker(QMainWindow):
                 "Non è stata impostata alcuna configurazione per il cliente. Imposta una configurazione prima di procedere."
             )
             return False
-        return all([self.check_company_config_is_complete(self.config), self.check_customer_config_is_complete(self.customer_config)])
-
+        return all([self.check_company_config_is_complete(self.config),
+                    self.check_customer_config_is_complete(self.customer_config)])
 
     def check_company_config_is_complete(self, config):
         # Verifica che ci siano i dati della società emittente
@@ -1653,7 +1695,7 @@ class PreventMaker(QMainWindow):
                     data = json.load(f)
 
                 # Imposta la configurazione
-                self.customer_config = data.get('config', {}).pop('customer', {})
+                self.customer_config = data.get('config', {}).get('customer', {})
                 self.check_customer_config_is_complete(self.customer_config)
                 self.config = data.get('config', {})
                 self.config.pop('customer')
@@ -1670,14 +1712,15 @@ class PreventMaker(QMainWindow):
                     row = self.product_table.addRow()
 
                     # Imposta i valori
-                    self.product_table.item(row, 0).setText(product.get('description', ''))
-                    self.product_table.cellWidget(row, 1).setValue(product.get('quantity', 1))
-                    self.product_table.cellWidget(row, 2).setValue(product.get('unit_price', 0.0))
-                    self.product_table.cellWidget(row, 3).setValue(product.get('discount', 0.0))
+                    self.product_table.item(row, ProductTableWidgetColumn.CODE_ITEM.value).setText(product.get(ProductTableJsonFieldsNames.CODE_ITEM.value, ""))
+                    self.product_table.item(row, ProductTableWidgetColumn.DESCRIPTION.value).setText(product.get(ProductTableJsonFieldsNames.DESCRIPTION.value, ""))
+                    self.product_table.cellWidget(row, ProductTableWidgetColumn.QNT.value).setValue(int(product.get(ProductTableJsonFieldsNames.QNT.value, 1)))
+                    self.product_table.cellWidget(row, ProductTableWidgetColumn.PRICE.value).setValue(product.get(ProductTableJsonFieldsNames.PRICE.value, ""))
+                    self.product_table.cellWidget(row, ProductTableWidgetColumn.DISCOUNT.value).setValue(product.get(ProductTableJsonFieldsNames.DISCOUNT.value, ""))
 
                     # Trova l'indice dell'aliquota IVA
-                    vat_rate = str(int(product.get('vat_rate', 22)))
-                    vat_combo = self.product_table.cellWidget(row, 4)
+                    vat_rate = str(int(product.get(ProductTableJsonFieldsNames.VAT.value, 22)))
+                    vat_combo = self.product_table.cellWidget(row, ProductTableWidgetColumn.VAT.value)
                     index = vat_combo.findText(vat_rate)
                     if index >= 0:
                         vat_combo.setCurrentIndex(index)
@@ -1758,10 +1801,10 @@ def _hide_splash(splash):
     """Ridimensiona la splash screen"""
     splash.hide()
 
+
 def main():
     app = QApplication(sys.argv)
     app.setStyle('Fusion')  # Stile moderno
-
 
     # Imposta il foglio di stile
     app.setStyleSheet("""

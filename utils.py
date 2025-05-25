@@ -2,7 +2,8 @@ import json
 import os
 import re
 import sqlite3
-from constants import DB_FILE_NAME
+from constants import DB_FILE_NAME, DEFAULT_NOTE
+
 
 def save_configuration(name, config):
     """Salva una configurazione nel database"""
@@ -281,3 +282,18 @@ def is_valid_phone(phone):
 def _config_unchanged(config, old_config):
     """Indica se le due configurazioni sono uguali"""
     return json.dumps(config, indent=2, default=str) == json.dumps(old_config, indent=2, default=str)
+
+def get_formatted_note(name, address, email):
+    return DEFAULT_NOTE.format(
+        company_name=name,
+        company_address=address,
+        company_email=email
+    )
+
+def add_default_note(config: dict , name: str, address: str, email: str):
+    if isinstance(config, dict):
+        if 'notes' not in config:
+            config['notes'] = get_formatted_note(name, address, email)
+        return config
+    else:
+        raise ValueError(f"La configurazione non è un dizionario, f{type(config)}")
