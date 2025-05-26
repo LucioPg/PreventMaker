@@ -1507,7 +1507,6 @@ class PreventMaker(QMainWindow):
         products = self.product_table.getProductsData()
         if products:
             # Intestazioni tabella
-            table_data = [["Codice Art.", "Descrizione", "Quantità", "Prezzo Unit.", "Sconto", "IVA", "Totale Netto"]]
             table_data = [self.product_table.labels]
 
             # Dati prodotti
