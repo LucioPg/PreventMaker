@@ -34,3 +34,7 @@ Ai sensi dell'articolo 13 del Decreto Legislativo n°196/2003, Le forniamo le se
 Le ricordiamo, infine, che in qualunque momento potrà esercitare i diritti di cui l'articolo 7 del Decreto Legislativo n° 196/2003
 contattando il titolare del trattamento presso: {company_name}, con sede in {company_address} o scrivendo all'indirizzo e-mail : {company_email}
 """
+
+"""
+
+"""
