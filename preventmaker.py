@@ -21,7 +21,8 @@ from products_enums import ProductTableWidgetColumn, ProductTableWidget, Product
 from utils import save_configuration, load_configuration, get_configuration_names, delete_configuration, \
     save_customer_configuration, load_customer_configuration, get_customer_configuration_names, \
     delete_customer_configuration, \
-    delete_database, init_db, is_valid_email, is_valid_vat, is_valid_phone, _config_unchanged, add_default_note
+    delete_database, init_db, is_valid_email, is_valid_vat, is_valid_phone, _config_unchanged, add_default_note, \
+    get_formatted_note
 
 from constants import *
 
@@ -64,6 +65,7 @@ class CompanyConfigWizard(QWizard):
         self._old_config = {}
         self._temp_config = {}
         self.is_rejected = False
+        self.is_initialized = False
         self.cancel_button = self.button(QWizard.WizardButton.CancelButton)
         # disconnetto il comportamento predefinito e applico il mio override
         self.cancel_button.disconnect()
@@ -83,15 +85,42 @@ class CompanyConfigWizard(QWizard):
             self.load_config(config_name)
 
         self.setMinimumSize(600, 400)
+        self.currentIdChanged.connect(self.on_page_changed)
         self.finished.connect(self.on_finish)
+        self.is_initialized = True
+
+    def on_page_changed(self, id):
+        # Se siamo passati alla terms_page
+        if self.is_initialized and self.page(id) == self.terms_page:
+            # Imposta i valori dinamici nella nota
+            self.set_name_address_email_for_note()
+
+    def set_name_address_email_for_note(self):
+        """Imposta i valori dinamici della company_page nella nota predefinita della terms_page"""
+        # Ottieni i valori dalla company_page
+        company_name = self.company_page.company_name.text()
+        company_address = self.company_page.company_address.toPlainText().strip()
+        company_email = self.company_page.company_email.text()
+
+        # Formatta la nota predefinita con i valori
+        nota_formattata = get_formatted_note(
+            company_name,
+            company_address,
+            company_email
+        )
+
+        # Imposta la nota formattata come testo predefinito nella terms_page
+        # Assumendo che terms_page.notes sia un QTextEdit o simile
+        self.terms_page.notes.setPlainText(nota_formattata)
+
 
     def custom_cancel_callback(self):
-        """Override del metodo invocato alla pressione del tasto cancel. Per fare il controllo se la configurazione
-         non è stata modificata"""
-        self._temp_config = self.get_config()
-        self.is_rejected = True
-        # invoco il metodo predefinito
-        self.reject()
+            """Override del metodo invocato alla pressione del tasto cancel. Per fare il controllo se la configurazione
+             non è stata modificata"""
+            self._temp_config = self.get_config()
+            self.is_rejected = True
+            # invoco il metodo predefinito
+            self.reject()
 
     def on_finish(self):
         """
@@ -343,6 +372,9 @@ class TermsPage(QWizardPage):
 
     def __init__(self):
         super().__init__()
+        self.company_name = ""
+        self.company_address = ""
+        self.company_email = ""
         self.setTitle("Termini e Condizioni")
         self.setSubTitle("Imposta termini, condizioni e altre informazioni")
 
@@ -358,7 +390,7 @@ class TermsPage(QWizardPage):
 
         # Note aggiuntive
         self.notes = QTextEdit()
-        self.notes.setPlaceholderText("Inserisci qui eventuali note...")
+        self.notes.setPlainText(get_formatted_note(self.company_name, self.company_address, self.company_email))
 
         # Preparato da
         self.prepared_by = QLineEdit()
