@@ -113,14 +113,13 @@ class CompanyConfigWizard(QWizard):
         # Assumendo che terms_page.notes sia un QTextEdit o simile
         self.terms_page.notes.setPlainText(nota_formattata)
 
-
     def custom_cancel_callback(self):
-            """Override del metodo invocato alla pressione del tasto cancel. Per fare il controllo se la configurazione
-             non è stata modificata"""
-            self._temp_config = self.get_config()
-            self.is_rejected = True
-            # invoco il metodo predefinito
-            self.reject()
+        """Override del metodo invocato alla pressione del tasto cancel. Per fare il controllo se la configurazione
+         non è stata modificata"""
+        self._temp_config = self.get_config()
+        self.is_rejected = True
+        # invoco il metodo predefinito
+        self.reject()
 
     def on_finish(self):
         """
@@ -420,7 +419,7 @@ class ProductTable(QTableWidget):
     totalChanged = pyqtSignal(float, float, float)  # Segnale per totale netto, iva, totale ivato
 
     def __init__(self, parent=None, labels=["Art.", "Descrizione", "Qnt", "P. U.",
-            "S. %", "IVA", "Valore"]):
+                                            "S. %", "IVA", "Valore"]):
         super().__init__(0, 7, parent)
         self.setHorizontalHeaderLabels(labels)
         self.labels = labels
@@ -1513,26 +1512,52 @@ class PreventMaker(QMainWindow):
 
             # Dati prodotti
             for product in products:
+                # Creare un Paragraph per la descrizione per permettere il wrapping del testo
+                description_paragraph = Paragraph(product['description'],
+                                                  ParagraphStyle('DescriptionStyle',
+                                                                 fontName='Helvetica',
+                                                                 fontSize=10,
+                                                                 leading=12))
+
                 table_data.append([
                     product['code'],
-                    product['description'],
+                    description_paragraph,
                     str(product['quantity']),
                     f"{product['unit_price']:.2f} €",
                     f"{product['discount']:.2f}%",
-                    f"{product['vat_rate']:.2f}%",
+                    f"{int(product['vat_rate'])}",
                     f"{product['net_total']:.2f} €"
                 ])
+            # Calcola le larghezze delle colonne dando priorità alla descrizione
+            # La colonna descrizione prenderà il 40% dello spazio disponibile
+            # Le altre colonne si divideranno lo spazio rimanente
+            table_width = doc.width
+            description_width = table_width * 0.4  # 40% per la colonna descrizione
+            other_columns_width = (
+                                              table_width - description_width) / 6  # Restante spazio diviso equamente tra le altre 6 colonne
+
+            col_widths = [other_columns_width,  # Codice Art.
+                          description_width,  # Descrizione (prioritaria)
+                          other_columns_width,  # Quantità
+                          other_columns_width,  # Prezzo Unit.
+                          other_columns_width,  # Sconto
+                          other_columns_width,  # IVA
+                          other_columns_width]  # Totale Netto
 
             # Crea la tabella
-            table = Table(table_data, repeatRows=1)
+            table = Table(table_data, repeatRows=1, colWidths=col_widths)
             table.setStyle(TableStyle([
                 ('BACKGROUND', (0, 0), (-1, 0), colors.grey),
                 ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
                 ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+                ('ALIGN', (1, 0), (1, -1), 'LEFT'),  # Allinea a sinistra la colonna descrizione
+                ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),  # Allinea al centro verticalmente
                 ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
                 ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
                 ('BACKGROUND', (0, 1), (-1, -1), colors.beige),
-                ('GRID', (0, 0), (-1, -1), 1, colors.black)
+                ('GRID', (0, 0), (-1, -1), 1, colors.black),
+                ('WORDWRAP', (1, 0), (1, -1), True)  # Abilita il ritorno a capo per la colonna descrizione
+
             ]))
 
             elements.append(table)
@@ -1745,11 +1770,16 @@ class PreventMaker(QMainWindow):
                     row = self.product_table.addRow()
 
                     # Imposta i valori
-                    self.product_table.item(row, ProductTableWidgetColumn.CODE_ITEM.value).setText(product.get(ProductTableJsonFieldsNames.CODE_ITEM.value, ""))
-                    self.product_table.item(row, ProductTableWidgetColumn.DESCRIPTION.value).setText(product.get(ProductTableJsonFieldsNames.DESCRIPTION.value, ""))
-                    self.product_table.cellWidget(row, ProductTableWidgetColumn.QNT.value).setValue(int(product.get(ProductTableJsonFieldsNames.QNT.value, 1)))
-                    self.product_table.cellWidget(row, ProductTableWidgetColumn.PRICE.value).setValue(product.get(ProductTableJsonFieldsNames.PRICE.value, ""))
-                    self.product_table.cellWidget(row, ProductTableWidgetColumn.DISCOUNT.value).setValue(product.get(ProductTableJsonFieldsNames.DISCOUNT.value, ""))
+                    self.product_table.item(row, ProductTableWidgetColumn.CODE_ITEM.value).setText(
+                        product.get(ProductTableJsonFieldsNames.CODE_ITEM.value, ""))
+                    self.product_table.item(row, ProductTableWidgetColumn.DESCRIPTION.value).setText(
+                        product.get(ProductTableJsonFieldsNames.DESCRIPTION.value, ""))
+                    self.product_table.cellWidget(row, ProductTableWidgetColumn.QNT.value).setValue(
+                        int(product.get(ProductTableJsonFieldsNames.QNT.value, 1)))
+                    self.product_table.cellWidget(row, ProductTableWidgetColumn.PRICE.value).setValue(
+                        product.get(ProductTableJsonFieldsNames.PRICE.value, ""))
+                    self.product_table.cellWidget(row, ProductTableWidgetColumn.DISCOUNT.value).setValue(
+                        product.get(ProductTableJsonFieldsNames.DISCOUNT.value, ""))
 
                     # Trova l'indice dell'aliquota IVA
                     vat_rate = str(int(product.get(ProductTableJsonFieldsNames.VAT.value, 22)))
