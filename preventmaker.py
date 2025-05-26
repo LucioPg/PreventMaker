@@ -419,13 +419,11 @@ class ProductTable(QTableWidget):
 
     totalChanged = pyqtSignal(float, float, float)  # Segnale per totale netto, iva, totale ivato
 
-    def __init__(self, parent=None):
+    def __init__(self, parent=None, labels=["Art.", "Descrizione", "Qnt", "P. U.",
+            "S. %", "IVA", "Valore"]):
         super().__init__(0, 7, parent)
-        self.setHorizontalHeaderLabels([
-            "Codice Art.", "Descrizione", "Quantità", "Prezzo Unitario (€)",
-            "Sconto (%)", "IVA (%)", "Totale Netto (€)"
-        ])
-
+        self.setHorizontalHeaderLabels(labels)
+        self.labels = labels
         # Imposta le proporzioni delle colonne
         self.column_proportions = [0.08, 0.4, 0.08, 0.12, 0.08, 0.08, 0.16]  # Proporzioni relative
 
@@ -1219,6 +1217,7 @@ class PreventMaker(QMainWindow):
         self.total_vat_label = QLabel("0.00 €")
         self.total_with_vat_label = QLabel("0.00 €")
 
+        # TODO AGGIUNGERE QUI LA DATA ??????????????????????????
         totals_layout.addRow("Totale Netto:", self.total_net_label)
         totals_layout.addRow("Totale IVA:", self.total_vat_label)
         totals_layout.addRow("Totale Ivato:", self.total_with_vat_label)
@@ -1510,6 +1509,7 @@ class PreventMaker(QMainWindow):
         if products:
             # Intestazioni tabella
             table_data = [["Codice Art.", "Descrizione", "Quantità", "Prezzo Unit.", "Sconto", "IVA", "Totale Netto"]]
+            table_data = [self.product_table.labels]
 
             # Dati prodotti
             for product in products:
@@ -1543,6 +1543,7 @@ class PreventMaker(QMainWindow):
         total_vat = float(self.total_vat_label.text().replace(" €", ""))
         total_with_vat = float(self.total_with_vat_label.text().replace(" €", ""))
 
+        # TODO AGGIUNGERE QUI LA DATA ???????????????????????
         elements.append(Paragraph(f"<b>Totale Netto:</b> {total_net:.2f} €", normal_style))
         elements.append(Paragraph(f"<b>Totale IVA:</b> {total_vat:.2f} €", normal_style))
         elements.append(Paragraph(f"<b>Totale Ivato:</b> {total_with_vat:.2f} €", normal_style))
@@ -1578,7 +1579,7 @@ class PreventMaker(QMainWindow):
 
         # Crea una tabella per la data e la firma
         signature_data = [
-            ["Data: _______________", "Firma del cliente"],
+            ["Firma del cliente"],
             ["", "____________________"]
         ]
 
