@@ -4,34 +4,34 @@ import qrcode
 from cryptography.fernet import Fernet
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
-import cv2
-from pyzbar.pyzbar import decode
+# import cv2
+# from pyzbar.pyzbar import decode
 
-def leggi_qr_preventivo(percorso_immagine, password):
-    # Leggere l'immagine
-    immagine = cv2.imread(percorso_immagine)
-
-    # Decodificare il QR code
-    risultati = decode(immagine)
-
-    if not risultati:
-        print("Nessun QR code trovato nell'immagine")
-        return None
-
-    # Estrarre i dati crittografati
-    dati_crittografati = risultati[0].data
-
-    try:
-        # Decrittografare
-        json_data = decrittografa_dati(dati_crittografati, password)
-
-        # Convertire da JSON a dizionario
-        preventivo = json.loads(json_data)
-
-        return preventivo
-    except Exception as e:
-        print(f"Errore durante la decrittografia: {e}")
-        return None
+# def leggi_qr_preventivo(percorso_immagine, password):
+#     # Leggere l'immagine
+#     immagine = cv2.imread(percorso_immagine)
+#
+#     # Decodificare il QR code
+#     risultati = decode(immagine)
+#
+#     if not risultati:
+#         print("Nessun QR code trovato nell'immagine")
+#         return None
+#
+#     # Estrarre i dati crittografati
+#     dati_crittografati = risultati[0].data
+#
+#     try:
+#         # Decrittografare
+#         json_data = decrittografa_dati(dati_crittografati, password)
+#
+#         # Convertire da JSON a dizionario
+#         preventivo = json.loads(json_data)
+#
+#         return preventivo
+#     except Exception as e:
+#         print(f"Errore durante la decrittografia: {e}")
+#         return None
 
 
 
