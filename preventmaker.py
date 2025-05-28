@@ -1,6 +1,8 @@
 import sys
 import os
 import json
+from io import BytesIO
+import PyPDF2
 from functools import partial
 from PyQt6.QtGui import QIcon, QPixmap
 from PyQt6.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
@@ -12,9 +14,10 @@ from PyQt6.QtCore import Qt, QUrl, pyqtSignal, QSettings, QTimer
 from PyQt6.QtWebEngineWidgets import QWebEngineView
 from reportlab.lib.pagesizes import A4
 from reportlab.lib import colors
-from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer, Image
+from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer, Image, PageTemplate
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib.units import mm, cm
+from reportlab.pdfgen import canvas
 import tempfile
 from dotenv import load_dotenv
 from custom_events import ConfigReadyEvent
@@ -24,36 +27,38 @@ from utils import save_configuration, load_configuration, get_configuration_name
     save_customer_configuration, load_customer_configuration, get_customer_configuration_names, \
     delete_customer_configuration, \
     delete_database, init_db, is_valid_email, is_valid_vat, is_valid_phone, _config_unchanged, add_default_note, \
-    get_formatted_note, genera_codice, get_all_quote_codes, get_current_date, prepare_data_for_qr
+    get_formatted_note, genera_codice, get_all_quote_codes, get_current_date, prepare_data_for_qr, scrittura_pdf
 
 from constants import *
 
 # Carica le variabili d'ambiente dal file .env
 load_dotenv()
 
-def dialog_with_icon(self, title, label, icon_path=None, default_text=""):
-    """
-    Versione personalizzata di QInputDialog.getText() che supporta l'impostazione di un'icona
+class DialogWithIcon:
 
-    Args:
-        title: Titolo della finestra
-        label: Testo dell'etichetta
-        icon_path: Percorso all'icona (opzionale)
-        default_text: Testo predefinito (opzionale)
+    def dialog_with_icon(self, title, label, icon_path=None, default_text=""):
+        """
+        Versione personalizzata di QInputDialog.getText() che supporta l'impostazione di un'icona
 
-    Returns:
-        tuple: (testo inserito, flag di accettazione)
-    """
-    dialog = QInputDialog(self)
-    dialog.setWindowTitle(title)
-    dialog.setLabelText(label)
-    dialog.setTextValue(default_text)
+        Args:
+            title: Titolo della finestra
+            label: Testo dell'etichetta
+            icon_path: Percorso all'icona (opzionale)
+            default_text: Testo predefinito (opzionale)
 
-    if icon_path:
-        dialog.setWindowIcon(QIcon(icon_path))
+        Returns:
+            tuple: (testo inserito, flag di accettazione)
+        """
+        dialog = QInputDialog(self)
+        dialog.setWindowTitle(title)
+        dialog.setLabelText(label)
+        dialog.setTextValue(default_text)
 
-    # ok = dialog.exec() == QInputDialog.accepted
-    return dialog
+        if icon_path:
+            dialog.setWindowIcon(QIcon(icon_path))
+
+        # ok = dialog.exec() == QInputDialog.accepted
+        return dialog
 
 
 class CompanyConfigWizard(QWizard):
@@ -667,7 +672,7 @@ class CustomerConfigWizard(QWizard):
             QMessageBox.warning(self, "Errore", "Impossibile salvare la configurazione Cliente.")
 
 
-class ConfigManagerDialog(QDialog):
+class ConfigManagerDialog(QDialog, DialogWithIcon):
     """Dialogo per la gestione delle configurazioni"""
 
     def __init__(self, parent=None):
@@ -734,8 +739,8 @@ class ConfigManagerDialog(QDialog):
 
     def new_configuration(self):
         """Crea una nuova configurazione"""
-        dialog = dialog_with_icon(
-            self, "Nuova Configurazione", "Nome della configurazione:", COMPANY_ICON_PATH
+        dialog = self.dialog_with_icon(
+             "Nuova Configurazione", "Nome della configurazione:", COMPANY_ICON_PATH
         )
         name = None
         if dialog.exec():
@@ -771,8 +776,8 @@ class ConfigManagerDialog(QDialog):
             return
 
         old_name = current_item.text()
-        dialog = dialog_with_icon(
-            self, "Rinomina Configurazione",
+        dialog = self.dialog_with_icon(
+            "Rinomina Configurazione",
             "Nuovo nome:", icon_path=COMPANY_ICON_PATH, default_text=old_name
         )
         new_name = None
@@ -855,7 +860,7 @@ class ConfigManagerDialog(QDialog):
                 )
 
 
-class CustomerConfigManagerDialog(QDialog):
+class CustomerConfigManagerDialog(QDialog, DialogWithIcon):
     """Dialogo per la gestione delle configurazioni cliente"""
 
     def __init__(self, parent=None):
@@ -923,7 +928,7 @@ class CustomerConfigManagerDialog(QDialog):
 
     def new_configuration(self):
         """Crea una nuova configurazione cliente"""
-        dialog = dialog_with_icon(self, "Nuovo Cliente", "Nome configurazione:", CUSTOMER_ICON_PATH)
+        dialog = self.dialog_with_icon( "Nuovo Cliente", "Nome configurazione:", CUSTOMER_ICON_PATH)
         name = None
         if dialog.exec():
             name = dialog.textValue().strip()
@@ -957,7 +962,7 @@ class CustomerConfigManagerDialog(QDialog):
             return
 
         old_name = current_item.text()
-        dialog = dialog_with_icon(self, "Rinomina Configurazione Cliente", "Nuovo nome:",
+        dialog = self.dialog_with_icon( "Rinomina Configurazione Cliente", "Nuovo nome:",
                                   icon_path=CUSTOMER_ICON_PATH, default_text=old_name)
         new_name = None
         if dialog.exec():
@@ -1121,7 +1126,7 @@ class AddNoteDialog(QDialog):
         return self.text_edit.toPlainText().strip()
 
 
-class PreventMaker(QMainWindow):
+class PreventMaker(QMainWindow, DialogWithIcon):
     """Finestra principale dell'applicazione"""
 
     def __init__(self):
@@ -1353,8 +1358,8 @@ class PreventMaker(QMainWindow):
     def saveConfiguration(self, name=None):
         """Salva la configurazione corrente nel database"""
         if not name and not self.current_config_name:
-            dialog = dialog_with_icon(
-                self, "Salva Configurazione", "Nome della configurazione:", COMPANY_ICON_PATH
+            dialog = self.dialog_with_icon(
+                 "Salva Configurazione", "Nome della configurazione:", COMPANY_ICON_PATH
             )
             name = None
             if dialog.exec():
@@ -1446,16 +1451,59 @@ class PreventMaker(QMainWindow):
         total_with_vat = float(self.total_with_vat_label.text().replace(" €", ""))
         return {'totals': {'net': total_net, 'vat': total_vat, 'total': total_with_vat}}
 
+    def add_quote_to_pdf(self, buffer, qr_path):
+        """Aggiunge il qr al PDF"""
+        # Riporta il puntatore all'inizio per poterlo leggere
+        buffer.seek(0)
+
+        # Apri il PDF dal buffer con PyPDF2
+        existing_pdf = PyPDF2.PdfReader(buffer)
+
+        # Crea un nuovo PDF writer per il risultato finale
+        output_pdf = PyPDF2.PdfWriter()
+
+        # Per ogni pagina nel PDF esistente (quello nel buffer)
+        for page_num in range(len(existing_pdf.pages)):
+            # Prendi la pagina corrente
+            page = existing_pdf.pages[page_num]
+
+            # Crea un nuovo buffer per il QR code
+            qr_buffer = BytesIO()
+
+            # Crea un canvas temporaneo delle stesse dimensioni della pagina
+            can = canvas.Canvas(qr_buffer, pagesize=A4)
+
+            #  Aggiungi il QR code al canvas
+            can.drawImage(qr_path, 500, 30, width=60, height=60)
+
+            # Finalizza il canvas (importante!)
+            can.save()
+
+            # Riporta il puntatore all'inizio del buffer del QR
+            qr_buffer.seek(0)
+
+            # Crea un PDF dalla pagina con il QR
+            qr_pdf = PyPDF2.PdfReader(qr_buffer)
+
+            # Unisci la pagina originale con la pagina contenente il QR
+            page.merge_page(qr_pdf.pages[0])
+
+            # Aggiungi la pagina modificata al PDF finale
+            output_pdf.add_page(page)
+        return output_pdf
+
     def generatePDF(self, output_path=None):
         """Genera il PDF del preventivo"""
         # Se non è specificato un percorso di output, usa un file temporaneo
         if not output_path:
             temp_dir = tempfile.gettempdir()
             output_path = os.path.join(temp_dir, "preventivo_temp.pdf")
+        # Crea un buffer in memoria
+        buffer = BytesIO()
 
         # Crea il documento PDF
         doc = SimpleDocTemplate(
-            output_path,
+            buffer, # faccio il pdf in memoria invece di salvarlo su disco, per poter aggiungere il qr su ogni pagina
             pagesize=A4,
             rightMargin=20 * mm,
             leftMargin=20 * mm,
@@ -1485,6 +1533,10 @@ class PreventMaker(QMainWindow):
         )
         # Preventivo
         quote = self.generate_quote()
+        # QR
+        qr_size = 60  # Dimensione del QR code in punti (regola secondo necessità)
+        qr_path = self.generate_qr(quote)
+
         # Elementi del documento
         elements = []
         # Ottieni la data corrente nel formato italiano
@@ -1617,41 +1669,31 @@ class PreventMaker(QMainWindow):
             elements.append(Spacer(1, 10 * mm))
     
             # Termini e condizioni
-            if self.config.get('terms'):
+            if company.get('terms'):
                 elements.append(Paragraph("<b>Termini e Condizioni:</b>", subtitle_style))
-                elements.append(Paragraph(self.config.get('terms', ''), normal_style))
+                elements.append(Paragraph(company.get('terms', ''), normal_style))
                 elements.append(Spacer(1, 5 * mm))
     
             # Note
-            if self.config.get('notes'):
+            if company.get('notes'):
                 elements.append(Paragraph("<b>Note:</b>", subtitle_style))
-                elements.append(Paragraph(self.config.get('notes', ''), normal_style))
+                elements.append(Paragraph(company.get('notes', ''), normal_style))
                 elements.append(Spacer(1, 5 * mm))
     
             # Preparato da
-            if self.config.get('prepared_by'):
+            if company.get('prepared_by'):
                 elements.append(
-                    Paragraph(f"<i>Preventivo preparato da: {self.config.get('prepared_by', '')}</i>", normal_style))
+                    Paragraph(f"<i>Preventivo preparato da: {company.get('prepared_by', '')}</i>", normal_style))
     
             # Aggiungi spazio prima della firma
             elements.append(Spacer(1, 20 * mm))
     
             # Aggiungi la sezione per la firma del cliente
-            signature_style = ParagraphStyle(
-                'Signature',
-                parent=normal_style,
-                alignment=1,  # Centered
-                fontSize=10
-            )
     
             # Testo per il preventivo e la firma
             prev_text = f"Prev. # {codice_preventivo}"
             firma_text = "Firma del Cliente"
-    
-            # Assumiamo che tu abbia un'immagine QR code già creata
-            qr_size = 60  # Dimensione del QR code in punti (regola secondo necessità)
-            qr_path = self.generate_qr(quote)
-            qr_code_image = Image(qr_path, width=qr_size, height=qr_size)
+
     
             # Calcola le larghezze delle colonne
             prev_width = len(prev_text) * 7
@@ -1663,7 +1705,7 @@ class PreventMaker(QMainWindow):
             # Calcola la larghezza della prima colonna vuota per spostare tutto a destra
             # Lascia un po' di margine a destra (es. 5% della larghezza totale)
             right_margin = total_width * 0.05
-            first_col_width = total_width - prev_width - firma_width - qr_size - right_margin
+            first_col_width = total_width - prev_width - firma_width - right_margin
     
             # Crea una tabella con quattro colonne:
             # - Prima colonna: vuota per creare spazio (sposta tutto a destra)
@@ -1671,7 +1713,7 @@ class PreventMaker(QMainWindow):
             # - Terza colonna: firma del cliente
             # - Quarta colonna: QR code
             table_data = [
-                ["", prev_text, firma_text, qr_code_image],
+                ["", prev_text, firma_text],
                 ["", "", "_" * len(firma_text), ""]
             ]
     
@@ -1704,7 +1746,8 @@ class PreventMaker(QMainWindow):
     
             # Genera il PDF
             doc.build(elements)
-    
+            buffer = self.add_quote_to_pdf(buffer, qr_path)
+            scrittura_pdf(output_path, buffer)
             return output_path
         else:
             return None

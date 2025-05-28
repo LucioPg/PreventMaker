@@ -375,3 +375,9 @@ def get_all_quote_codes():
 def prepare_data_for_qr(data:dict):
     return {'customer_name': data.get('customer', {}).get('customer_name'), 'date': data.get('date', get_current_date()), 'quote_code': data.get('quote_code', genera_codice_random())}
 
+
+def scrittura_pdf(output_path, data):
+    """Scrive il PDF"""
+    # Salva il PDF finale
+    with open(output_path, "wb") as f:
+        data.write(f)
