@@ -1,24 +1,55 @@
 import os
 import sys
 import subprocess
-import shutil
 from pathlib import Path
+
+
+def resource_path(relative_path):
+    """ Get absolute path to resource, works for dev and for PyInstaller """
+    try:
+        # PyInstaller creates a temp folder and stores path in _MEIPASS
+        base_path = sys._MEIPASS
+    except Exception:
+        base_path = os.path.abspath(".")
+
+    return os.path.join(base_path, relative_path)
+
 
 def build_executable():
     """
-    Build the executable using PyInstaller
+    Build the executable using PyInstaller for Windows 11
     """
-    print("Building PreventMaker executable...")
-    
+    print("Building PreventMaker executable for Windows 11...")
+
     # Ensure PyInstaller is installed
     try:
         import PyInstaller
     except ImportError:
         print("PyInstaller not found. Installing...")
         subprocess.check_call([sys.executable, "-m", "pip", "install", "pyinstaller"])
-    
+
+    # Define icon path
+    icon_path = os.path.join(os.getcwd(), "icons", "PreventMaker.ico")
+    if not os.path.exists(icon_path):
+        print(f"Warning: Icon file not found at {icon_path}")
+        icon_path = "NONE"
+    else:
+        # Replace backslashes with forward slashes to avoid escape character issues
+        icon_path = icon_path.replace("\\", "/")
+
+    # Create data files list for PyInstaller
+    datas = [
+        ("icons/*.ico", "icons"),
+        ("icons/*.png", "icons"),
+        # (numpy_core_dir + '\\*.dll', 'numpy\\core'),
+        # (numpy_core_dir + '\\*.pyd', 'numpy\\core')
+    ]
+
+    # Convert datas to string format for spec file
+    datas_str = str(datas).replace("'", "\"")
+
     # Create a temporary spec file
-    spec_content = """
+    spec_content = f"""
 # -*- mode: python ; coding: utf-8 -*-
 
 block_cipher = None
@@ -27,10 +58,25 @@ a = Analysis(
     ['preventmaker.py'],
     pathex=[],
     binaries=[],
-    datas=[],
-    hiddenimports=[],
+    datas={datas_str},
+    hiddenimports=[
+        'PyQt6.QtWebEngineWidgets', 
+        'PyQt6.QtWebEngineCore', 
+        'reportlab', 
+        'PyPDF2',
+        'dotenv',
+        'python-dotenv',
+        'custom_events',
+        'products_enums',
+        'qcode',
+        'utils',
+        'constants',
+        'json',
+        'tempfile',
+
+    ],
     hookspath=[],
-    hooksconfig={},
+    hooksconfig={{}},
     runtime_hooks=[],
     excludes=[],
     win_no_prefer_redirects=False,
@@ -48,7 +94,7 @@ exe = EXE(
     a.datas,
     [],
     name='PreventMaker',
-    debug=False,
+    debug=True,
     bootloader_ignore_signals=False,
     strip=False,
     upx=True,
@@ -60,28 +106,41 @@ exe = EXE(
     target_arch=None,
     codesign_identity=None,
     entitlements_file=None,
-    icon='NONE',
+    icon='{icon_path}',
+    uac_admin=False,
 )
     """
-    
+
     with open("preventmaker.spec", "w") as f:
         f.write(spec_content)
-    
+
     # Build the executable
-    print("Running PyInstaller...")
-    subprocess.check_call([
+    print("Running PyInstaller for Windows 11...")
+
+    # Set environment variable to ensure Windows 11 compatibility
+    os.environ['PYTHONIOENCODING'] = 'utf-8'
+
+    # Build command for Windows 11
+    build_cmd = [
         sys.executable, 
         "-m", 
-        "PyInstaller", 
+        "PyInstaller",
         "preventmaker.spec",
         "--clean",
-        "--noconfirm"
-    ])
-    
+        "--noconfirm",
+        # Note: --windowed and --uac-admin options are now defined in the spec file
+    ]
+
+    try:
+        subprocess.check_call(build_cmd)
+    except subprocess.CalledProcessError as e:
+        print(f"Error during build: {e}")
+        return None
+
     # Check if build was successful
     dist_dir = Path("dist")
     exe_path = dist_dir / "PreventMaker.exe"
-    
+
     if exe_path.exists():
         print(f"Build successful! Executable created at: {exe_path.absolute()}")
         return str(exe_path.absolute())
