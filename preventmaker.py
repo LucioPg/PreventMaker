@@ -330,7 +330,7 @@ class CustomerPage(QWizardPage):
         layout.addRow("Indirizzo:", self.customer_address)
         layout.addRow("Telefono:", self.customer_phone)
         layout.addRow("Email (*):", self.customer_email)
-        layout.addRow("Partita IVA:", self.customer_vat_code)
+        layout.addRow("Partita IVA / CF:", self.customer_vat_code)
 
         self.setLayout(layout)
 
@@ -701,8 +701,6 @@ class CustomerConfigWizard(QWizard):
         Questo metodo viene chiamato quando l'utente tenta di chiudere il wizard
         cliccando sulla X in alto a destra o usando Alt+F4
         """
-        print("closeEvent: L'utente ha tentato di chiudere il wizard con la X")
-
         self.is_rejected = True
 
 
