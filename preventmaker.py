@@ -780,7 +780,7 @@ class ConfigManagerDialog(QDialog, DialogWithIcon):
         if name:
             # Verifica se il nome esiste già
             existing_names = get_configuration_names()
-            if name in existing_names:
+            if name.lower() in existing_names:
                 QMessageBox.warning(
                     self, "Nome Duplicato",
                     "Esiste già una configurazione con questo nome. Scegli un nome diverso."
@@ -814,11 +814,11 @@ class ConfigManagerDialog(QDialog, DialogWithIcon):
         )
         new_name = None
         if dialog.exec():
-            name = dialog.textValue().strip()
+            new_name = dialog.textValue().strip()
         if new_name and new_name != old_name:
             # Verifica se il nuovo nome esiste già
             existing_names = get_configuration_names()
-            if new_name in existing_names:
+            if new_name.lower() in existing_names:
                 QMessageBox.warning(
                     self, "Nome Duplicato",
                     "Esiste già una configurazione con questo nome. Scegli un nome diverso."
@@ -1028,7 +1028,7 @@ class CustomerConfigManagerDialog(QDialog, DialogWithIcon):
         if new_name and new_name != old_name:
             # Verifica se il nuovo nome esiste già
             existing_names = get_customer_configuration_names()
-            if new_name in existing_names:
+            if new_name.lower() in existing_names:
                 QMessageBox.warning(
                     self, "Nome Duplicato",
                     "Esiste già una configurazione cliente con questo nome. Scegli un nome diverso."

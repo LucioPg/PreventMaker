@@ -84,7 +84,7 @@ def get_configuration_names():
 
     try:
         cursor.execute('SELECT name FROM company_configurations ORDER BY name')
-        names = [row[0] for row in cursor.fetchall()]
+        names = [row[0].lower() for row in cursor.fetchall()]
         return names
     except Exception as e:
         print(f"Errore nel recupero delle configurazioni: {str(e)}")
@@ -174,7 +174,7 @@ def get_customer_configuration_names():
 
     try:
         cursor.execute('SELECT name FROM customer_configurations ORDER BY name')
-        names = [row[0] for row in cursor.fetchall()]
+        names = [row[0].lower() for row in cursor.fetchall()]
         return names
     except Exception as e:
         print(f"Errore nel recupero delle configurazioni cliente: {str(e)}")
