@@ -281,6 +281,66 @@ def is_valid_phone(phone):
     return 8 <= len(digits_only) <= 15
 
 
+def is_valid_codice_fiscale(cf):
+    """
+    Verifica se una stringa è un codice fiscale italiano valido.
+    """
+    """
+    Verifica se una stringa è un codice fiscale italiano valido.
+    """
+    try:
+        # Converti in maiuscolo e rimuovi spazi
+        cf = cf.upper().strip()
+
+        # Verifica lunghezza e formato base
+        if len(cf) != 16:
+            return False
+
+        # Controlla che il formato sia corretto usando un'espressione regolare
+        regex = r'^[A-Z]{6}\d{2}[A-EHLMPRST]\d{2}[A-Z]\d{3}[A-Z]$'
+        if not re.match(regex, cf):
+            return False
+
+        # Valori per le posizioni dispari (indice 0-based)
+        val_dispari = {
+            '0': 1, '1': 0, '2': 5, '3': 7, '4': 9, '5': 13, '6': 15, '7': 17, '8': 19,
+            '9': 21, 'A': 1, 'B': 0, 'C': 5, 'D': 7, 'E': 9, 'F': 13, 'G': 15, 'H': 17,
+            'I': 19, 'J': 21, 'K': 2, 'L': 4, 'M': 18, 'N': 20, 'O': 11, 'P': 3, 'Q': 6,
+            'R': 8, 'S': 12, 'T': 14, 'U': 16, 'V': 10, 'W': 22, 'X': 25, 'Y': 24, 'Z': 23
+        }
+
+        # Valori per le posizioni pari (indice 0-based)
+        val_pari = {
+            '0': 0, '1': 1, '2': 2, '3': 3, '4': 4, '5': 5, '6': 6, '7': 7, '8': 8,
+            '9': 9, 'A': 0, 'B': 1, 'C': 2, 'D': 3, 'E': 4, 'F': 5, 'G': 6, 'H': 7,
+            'I': 8, 'J': 9, 'K': 10, 'L': 11, 'M': 12, 'N': 13, 'O': 14, 'P': 15, 'Q': 16,
+            'R': 17, 'S': 18, 'T': 19, 'U': 20, 'V': 21, 'W': 22, 'X': 23, 'Y': 24, 'Z': 25
+        }
+
+        # Calcolo del carattere di controllo
+        s = 0
+        for i in range(15):
+            c = cf[i]
+            if i % 2 == 0:  # Posizione dispari (indice pari in Python)
+                if c not in val_dispari:
+                    return False
+                s += val_dispari[c]
+            else:  # Posizione pari (indice dispari in Python)
+                if c not in val_pari:
+                    return False
+                s += val_pari[c]
+
+        # Verifica che il carattere di controllo sia corretto
+        resto = s % 26
+        carattere_controllo = chr(resto + ord('A'))
+        return carattere_controllo == cf[15]
+
+    except Exception as e:
+        # Gestione di qualsiasi errore imprevisto
+        print(e)
+        return False
+
+
 def _config_unchanged(config, old_config):
     """Indica se le due configurazioni sono uguali"""
     return json.dumps(config, indent=2, default=str) == json.dumps(old_config, indent=2, default=str)

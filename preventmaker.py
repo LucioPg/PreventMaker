@@ -4,7 +4,7 @@ import json
 from io import BytesIO
 import PyPDF2
 from functools import partial
-from PyQt6.QtGui import QIcon, QPixmap
+from PyQt6.QtGui import QIcon, QPixmap, QCloseEvent
 from PyQt6.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
                              QLabel, QLineEdit, QTextEdit, QPushButton, QTableWidget,
                              QSpinBox, QDoubleSpinBox, QComboBox,
@@ -27,7 +27,8 @@ from utils import save_configuration, load_configuration, get_configuration_name
     save_customer_configuration, load_customer_configuration, get_customer_configuration_names, \
     delete_customer_configuration, \
     delete_database, init_db, is_valid_email, is_valid_vat, is_valid_phone, _config_unchanged, add_default_note, \
-    get_formatted_note, genera_codice, get_all_quote_codes, get_current_date, prepare_data_for_qr, scrittura_pdf
+    get_formatted_note, genera_codice, get_all_quote_codes, get_current_date, prepare_data_for_qr, scrittura_pdf, \
+    is_valid_codice_fiscale
 
 from constants import *
 
@@ -365,13 +366,24 @@ class CustomerPage(QWizardPage):
             )
             return False
         # Verifica che la partita IVA sia valida (se compilata)
-        if vat.strip() and not is_valid_vat(vat.strip()):
-            QMessageBox.warning(
-                self, "Partita IVA non valida",
-                "La partita IVA del cliente non è valida. Deve essere un numero di 11 cifre."
-            )
-            return False
-
+        if vat.strip():
+            vat_ok = True
+            cf_ok = True
+            messages = {'vat': ["Partita IVA non valida",
+                    "La partita IVA del cliente non è valida. Deve essere un numero di 11 cifre."],
+                        'cf': ["Codice Fiscale non valido", "Il codice fiscale del cliente non è valido. Deve essere un codice di 16 elementi."]}
+            if not is_valid_vat(vat.strip()):
+                vat_ok = False
+            if not vat_ok and not is_valid_codice_fiscale(vat.strip()):
+                cf_ok = False
+            else:
+                vat_ok = True
+            if not all([vat_ok, cf_ok]):
+                key = 'vat' if not vat_ok else 'cf'
+                QMessageBox.warning(
+                    self, messages[key][0], messages[key][1]
+                )
+                return False
         return True
 
 
@@ -630,7 +642,7 @@ class CustomerConfigWizard(QWizard):
         self.setWindowIcon(QIcon(CUSTOMER_ICON_PATH))
         self.setWizardStyle(QWizard.WizardStyle.ModernStyle)
         self.setMinimumSize(600, 400)
-
+        self.is_rejected = False
         init_db()
 
         self.customer_page = CustomerPage()
@@ -638,6 +650,10 @@ class CustomerConfigWizard(QWizard):
         if self.config_name:
             self.load_config(self.config_name)
         self.finished.connect(self.on_finish)
+        self.cancel_button = self.button(QWizard.WizardButton.CancelButton)
+        # disconnetto il comportamento predefinito e applico il mio override
+        self.cancel_button.disconnect()
+        self.cancel_button.clicked.connect(self.custom_cancel_callback)
 
     def load_config(self, name):
         config = load_customer_configuration(name)
@@ -663,6 +679,9 @@ class CustomerConfigWizard(QWizard):
         Salva la configurazione finale.
         :return:
         """
+        if self.is_rejected:
+            self.is_rejected = False
+            return
         config = self.get_config()
         if config and self.customer_page.isComplete():
             # Salva la configurazione
@@ -670,6 +689,21 @@ class CustomerConfigWizard(QWizard):
             QMessageBox.information(self, "Salvataggio", "La configurazione Cliente è stata salvata.")
         else:
             QMessageBox.warning(self, "Errore", "Impossibile salvare la configurazione Cliente.")
+
+    def custom_cancel_callback(self):
+        """Override del metodo invocato alla pressione del tasto cancel."""
+        self.is_rejected = True
+        # invoco il metodo predefinito
+        self.reject()
+
+    def closeEvent(self, event: QCloseEvent):
+        """
+        Questo metodo viene chiamato quando l'utente tenta di chiudere il wizard
+        cliccando sulla X in alto a destra o usando Alt+F4
+        """
+        print("closeEvent: L'utente ha tentato di chiudere il wizard con la X")
+
+        self.is_rejected = True
 
 
 class ConfigManagerDialog(QDialog, DialogWithIcon):
