@@ -252,9 +252,9 @@ def init_db():
 
     # Crea la tabella dei preventivi di una data compagnia e di un dato cliente se non esiste
     cursor.execute('''
-        CREATE TABLE quotes (
+        CREATE TABLE IF NOT EXISTS quotes (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
-        quote_code VARCHAR(20) NOT NULL,
+        quote_code VARCHAR(20) UNIQUE NOT NULL,
         company_id INTEGER NOT NULL,
         customer_id INTEGER NOT NULL,
         quote_json TEXT,
@@ -267,16 +267,34 @@ def init_db():
     conn.commit()
     conn.close()
 
-def save_quote_on_db(quote_code, company_id, customer_id, quote_json):
+def save_quote_on_db(quote):
     """Salva un preventivo su un database SQLite"""
     conn = sqlite3.connect(DB_FILE_NAME)
     cursor = conn.cursor()
+    company_id = _get_company_id_by_name(cursor, quote.get('company', {}).get('company_name'))
+    customer_id = _get_customer_id_by_name(cursor, quote.get('customer', {}).get('customer_name'), quote.get('customer', {}).get('customer_email'))
+    quote_code = quote.get('quote_code')
+    quote_json = json.dumps(quote, indent=4, default=str)
     cursor.execute('''
         INSERT INTO quotes (quote_code, company_id, customer_id, quote_json)
         VALUES (?, ?, ?, ?)
     ''', (quote_code, company_id, customer_id, quote_json))
     conn.commit()
     conn.close()
+
+
+def _get_company_id_by_name(cursor, name):
+    """Restituisce l'ID di una compagnia dal database"""
+    cursor.execute('SELECT id FROM company_configurations WHERE LOWER(company_name) = LOWER(?)', (name,))
+    company_id = cursor.fetchone() # [row[0] for row in cursor.fetchall()]
+    return company_id[0]
+
+
+def _get_customer_id_by_name(cursor, name, email):
+    """Restituisce l'ID di un cliente dal database"""
+    cursor.execute('SELECT id FROM customer_configurations WHERE LOWER(customer_name) = LOWER(?) and LOWER(customer_email) = LOWER(?)', (name, email))
+    customer_id = cursor.fetchone() # [row[0] for row in cursor.fetchall()]
+    return customer_id[0]
 
 
 def is_valid_email(email):
@@ -463,7 +481,7 @@ def get_all_quote_codes():
     cursor.execute("SELECT quote_code FROM quotes")
     quote_codes = [row[0] for row in cursor.fetchall()]
     conn.close()
-    return quote_codes
+    return set(quote_codes)
 
 def prepare_data_for_qr(data:dict):
     return {'customer_name': data.get('customer', {}).get('customer_name'), 'date': data.get('date', get_current_date()), 'quote_code': data.get('quote_code', genera_codice_random())}

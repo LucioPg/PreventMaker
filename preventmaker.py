@@ -28,7 +28,7 @@ from utils import save_configuration, load_configuration, get_configuration_name
     delete_customer_configuration, \
     delete_database, init_db, is_valid_email, is_valid_vat, is_valid_phone, _config_unchanged, add_default_note, \
     get_formatted_note, genera_codice, get_all_quote_codes, get_current_date, prepare_data_for_qr, scrittura_pdf, \
-    is_valid_codice_fiscale
+    is_valid_codice_fiscale, save_quote_on_db
 
 from constants import *
 
@@ -1550,7 +1550,7 @@ class PreventMaker(QMainWindow, DialogWithIcon):
             output_pdf.add_page(page)
         return output_pdf
 
-    def generatePDF(self, output_path=None):
+    def generatePDF(self, output_path=None, quote=None):
         """Genera il PDF del preventivo"""
         # Se non è specificato un percorso di output, usa un file temporaneo
         if not output_path:
@@ -1590,7 +1590,8 @@ class PreventMaker(QMainWindow, DialogWithIcon):
             spaceAfter=5
         )
         # Preventivo
-        quote = self.generate_quote()
+        if quote is None:
+            quote = self.generate_quote()
         # QR
         qr_size = 60  # Dimensione del QR code in punti (regola secondo necessità)
         qr_path = self.generate_qr(quote)
@@ -1856,7 +1857,8 @@ class PreventMaker(QMainWindow, DialogWithIcon):
             return
 
         try:
-            pdf_path = self.generatePDF()
+            quote = self.generate_quote()
+            pdf_path = self.generatePDF(quote=quote)
             if pdf_path:
                 preview_dialog = PDFPreviewDialog(pdf_path, self)
                 preview_dialog.exec()
@@ -1871,14 +1873,20 @@ class PreventMaker(QMainWindow, DialogWithIcon):
         file_path, _ = QFileDialog.getSaveFileName(
             self, "Esporta PDF", "", "File PDF (*.pdf)"
         )
-
+        quote = self.generate_quote()
         if file_path:
             try:
-                self.generatePDF(file_path)
+                self.generatePDF(file_path, quote=quote)
                 QMessageBox.information(self, "Esportazione Completata",
                                         f"Il preventivo è stato esportato in:\n{file_path}")
             except Exception as e:
                 QMessageBox.critical(self, "Errore", f"Errore nell'esportazione: {str(e)}")
+        try:
+            save_quote_on_db(quote)
+        except Exception as e:
+            print(e)
+            QMessageBox.critical(self, "Errore Salvataggio nel DB",
+                                 f"Errore:\n{str(e)}")
 
     def generate_quote(self):
         """Genera il preventivo."""
@@ -1924,6 +1932,12 @@ class PreventMaker(QMainWindow, DialogWithIcon):
                 self.setModified(False)
                 QMessageBox.information(self, "Salvataggio Completato",
                                         f"Il preventivo è stato salvato in:\n{file_path}")
+                try:
+                    save_quote_on_db(data)
+                except Exception as e:
+                    print(e)
+                    QMessageBox.critical(self, "Errore Salvataggio nel DB",
+                                            f"Errore:\n{str(e)}")
             except Exception as e:
                 QMessageBox.critical(self, "Errore", f"Errore nel salvataggio: {str(e)}")
 
