@@ -908,10 +908,21 @@ class CustomerConfigManagerDialog(QDialog, DialogWithIcon):
 
         layout = QVBoxLayout()
 
+        # Aggiunta della search bar
+        search_layout = QHBoxLayout()
+        search_label = QLabel("Cerca: ")
+        self.search_bar = QLineEdit()
+        self.search_bar.setPlaceholderText("Filtra clienti...")
+        self.search_bar.textChanged.connect(self.filter_configurations)
+        search_layout.addWidget(search_label)
+        search_layout.addWidget(self.search_bar)
+
         # Lista delle configurazioni
         self.config_list = QListWidget()
         self.config_list.setSelectionMode(QListWidget.SelectionMode.SingleSelection)
         self.config_list.itemDoubleClicked.connect(self.accept)
+        # Configura la scrollbar per apparire solo quando necessario
+        self.config_list.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
         self.load_configurations()
 
         # Pulsanti per la gestione delle configurazioni
@@ -946,6 +957,7 @@ class CustomerConfigManagerDialog(QDialog, DialogWithIcon):
 
         # Assembla il layout
         layout.addWidget(QLabel("Configurazioni cliente disponibili:"))
+        layout.addLayout(search_layout)
         layout.addWidget(self.config_list)
         layout.addLayout(buttons_layout)
 
@@ -955,8 +967,22 @@ class CustomerConfigManagerDialog(QDialog, DialogWithIcon):
         """Carica la lista delle configurazioni dal database"""
         self.config_list.clear()
         names = get_customer_configuration_names()
+        # Ordina i nomi in ordine alfabetico
+        names.sort()
         for name in names:
             self.config_list.addItem(name)
+
+    def filter_configurations(self, text):
+        """Filtra le configurazioni in base al testo di ricerca"""
+        # Ottieni tutti i nomi di configurazione e ordinali alfabeticamente
+        all_names = get_customer_configuration_names()
+        all_names.sort()
+
+        # Filtra i nomi in base al testo di ricerca
+        self.config_list.clear()
+        for name in all_names:
+            if text.lower() in name.lower():
+                self.config_list.addItem(name)
 
     def new_configuration(self):
         """Crea una nuova configurazione cliente"""
@@ -1622,20 +1648,20 @@ class PreventMaker(QMainWindow, DialogWithIcon):
             elements.append(Paragraph(f"Tel: {customer.get('customer_phone', '')}", normal_style))
             elements.append(Paragraph(f"Email: {customer.get('customer_email', '')}", normal_style))
             if customer.get('customer_vat_code'):
-                elements.append(Paragraph(f"P.IVA: {customer.get('customer_vat_code', '')}", normal_style))
+                elements.append(Paragraph(f"P.IVA / CF: {customer.get('customer_vat_code', '')}", normal_style))
             elements.append(Spacer(1, 10 * mm))
 
             # Titolo preventivo
             elements.append(Paragraph("PREVENTIVO", title_style))
             elements.append(Paragraph(f"Data: {data_corrente} - Codice: {codice_preventivo}", details_style))
             elements.append(Spacer(1, 5 * mm))
-    
+
             # Tabella prodotti
             products = self.product_table.getProductsData()
             if products:
                 # Intestazioni tabella
                 table_data = [self.product_table.labels]
-    
+
                 # Dati prodotti
                 for product in products:
                     # Creare un Paragraph per la descrizione per permettere il wrapping del testo
@@ -1644,7 +1670,7 @@ class PreventMaker(QMainWindow, DialogWithIcon):
                                                                      fontName='Helvetica',
                                                                      fontSize=10,
                                                                      leading=12))
-    
+
                     table_data.append([
                         product['code'],
                         description_paragraph,
@@ -1661,7 +1687,7 @@ class PreventMaker(QMainWindow, DialogWithIcon):
                 description_width = table_width * 0.4  # 40% per la colonna descrizione
                 other_columns_width = (
                                                   table_width - description_width) / 6  # Restante spazio diviso equamente tra le altre 6 colonne
-    
+
                 col_widths = [other_columns_width,  # Codice Art.
                               description_width,  # Descrizione (prioritaria)
                               other_columns_width,  # Quantità
@@ -1669,7 +1695,7 @@ class PreventMaker(QMainWindow, DialogWithIcon):
                               other_columns_width,  # Sconto
                               other_columns_width,  # IVA
                               other_columns_width]  # Totale Netto
-    
+
                 # Crea la tabella
                 table = Table(table_data, repeatRows=1, colWidths=col_widths)
                 table.setStyle(TableStyle([
@@ -1683,62 +1709,62 @@ class PreventMaker(QMainWindow, DialogWithIcon):
                     ('BACKGROUND', (0, 1), (-1, -1), colors.beige),
                     ('GRID', (0, 0), (-1, -1), 1, colors.black),
                     ('WORDWRAP', (1, 0), (1, -1), True)  # Abilita il ritorno a capo per la colonna descrizione
-    
+
                 ]))
-    
+
                 elements.append(table)
                 elements.append(Spacer(1, 10 * mm))
-    
+
             # Totali
             totals = self.get_totals()
             total_net = totals.get('totals', {}).get('net', 0)
             total_vat = totals.get('totals', {}).get('vat', 0)
             total_with_vat = totals.get('totals', {}).get('total', 0)
-    
+
             elements.append(Paragraph(f"<b>Totale Netto:</b> {total_net:.2f} €", normal_style))
             elements.append(Paragraph(f"<b>Totale IVA:</b> {total_vat:.2f} €", normal_style))
             elements.append(Paragraph(f"<b>Totale Ivato:</b> {total_with_vat:.2f} €", normal_style))
             elements.append(Spacer(1, 10 * mm))
-    
+
             # Termini e condizioni
             if company.get('terms'):
                 elements.append(Paragraph("<b>Termini e Condizioni:</b>", subtitle_style))
                 elements.append(Paragraph(company.get('terms', ''), normal_style))
                 elements.append(Spacer(1, 5 * mm))
-    
+
             # Note
             if company.get('notes'):
                 elements.append(Paragraph("<b>Note:</b>", subtitle_style))
                 elements.append(Paragraph(company.get('notes', ''), normal_style))
                 elements.append(Spacer(1, 5 * mm))
-    
+
             # Preparato da
             if company.get('prepared_by'):
                 elements.append(
                     Paragraph(f"<i>Preventivo preparato da: {company.get('prepared_by', '')}</i>", normal_style))
-    
+
             # Aggiungi spazio prima della firma
             elements.append(Spacer(1, 20 * mm))
-    
+
             # Aggiungi la sezione per la firma del cliente
-    
+
             # Testo per il preventivo e la firma
             prev_text = f"Prev. # {codice_preventivo}"
             firma_text = "Firma del Cliente"
 
-    
+
             # Calcola le larghezze delle colonne
             prev_width = len(prev_text) * 7
             firma_width = len(firma_text) * 7
-    
+
             # Calcola la larghezza totale disponibile
             total_width = doc.width
-    
+
             # Calcola la larghezza della prima colonna vuota per spostare tutto a destra
             # Lascia un po' di margine a destra (es. 5% della larghezza totale)
             right_margin = total_width * 0.05
             first_col_width = total_width - prev_width - firma_width - right_margin
-    
+
             # Crea una tabella con quattro colonne:
             # - Prima colonna: vuota per creare spazio (sposta tutto a destra)
             # - Seconda colonna: numero preventivo
@@ -1748,34 +1774,34 @@ class PreventMaker(QMainWindow, DialogWithIcon):
                 ["", prev_text, firma_text],
                 ["", "", "_" * len(firma_text), ""]
             ]
-    
+
             # Crea la tabella con le larghezze calcolate
             signature_table = Table(table_data,
                                     colWidths=[first_col_width, prev_width, firma_width, qr_size])
-    
+
             # Imposta gli stili
             signature_table.setStyle(TableStyle([
                 # Allineamento testo
                 ('ALIGN', (1, 0), (1, 0), 'LEFT'),  # Preventivo allineato a sinistra
                 ('ALIGN', (2, 0), (2, 1), 'CENTER'),  # Firma e linea centrate
                 ('ALIGN', (3, 0), (3, 0), 'CENTER'),  # QR code centrato
-    
+
                 # Allineamento verticale
                 ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
-    
+
                 # Unisci le celle per il QR code (span verticale)
                 ('SPAN', (3, 0), (3, 1)),  # Il QR code occupa entrambe le righe
-    
+
                 # Spazio tra "Firma del Cliente" e la linea sottostante
                 ('TOPPADDING', (2, 1), (2, 1), 20),
                 ('BOTTOMPADDING', (2, 0), (2, 0), 5),
-    
+
                 # Nessun bordo
                 ('GRID', (0, 0), (-1, -1), 0, colors.white),
             ]))
-    
+
             elements.append(signature_table)
-    
+
             # Genera il PDF
             doc.build(elements)
             buffer = self.add_quote_to_pdf(buffer, qr_path)
