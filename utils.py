@@ -51,7 +51,7 @@ def load_configuration(name):
         SELECT company_name, company_address, company_phone, company_email, company_vat_code,
                company_logo, terms, vat_rate, notes, prepared_by
         FROM company_configurations
-        WHERE name = ?
+        WHERE LOWER(name) = LOWER(?)
         ''', (name,))
 
         row = cursor.fetchone()
@@ -84,7 +84,7 @@ def get_configuration_names():
 
     try:
         cursor.execute('SELECT name FROM company_configurations ORDER BY name')
-        names = [row[0].lower() for row in cursor.fetchall()]
+        names = [row[0] for row in cursor.fetchall()]
         return names
     except Exception as e:
         print(f"Errore nel recupero delle configurazioni: {str(e)}")
@@ -99,7 +99,7 @@ def delete_configuration(name):
     cursor = conn.cursor()
 
     try:
-        cursor.execute('DELETE FROM company_configurations WHERE name = ?', (name,))
+        cursor.execute('DELETE FROM company_configurations WHERE LOWER(name) = LOWER(?)', (name,))
         conn.commit()
         return True
     except Exception as e:
@@ -146,7 +146,7 @@ def load_customer_configuration(name):
         cursor.execute('''
         SELECT customer_name, customer_address, customer_phone, customer_email, customer_vat_code
         FROM customer_configurations
-        WHERE name = ?
+        WHERE LOWER(name) = LOWER(?)
         ''', (name,))
 
         row = cursor.fetchone()
@@ -174,7 +174,7 @@ def get_customer_configuration_names():
 
     try:
         cursor.execute('SELECT name FROM customer_configurations ORDER BY name')
-        names = [row[0].lower() for row in cursor.fetchall()]
+        names = [row[0] for row in cursor.fetchall()]
         return names
     except Exception as e:
         print(f"Errore nel recupero delle configurazioni cliente: {str(e)}")
@@ -189,7 +189,7 @@ def delete_customer_configuration(name):
     cursor = conn.cursor()
 
     try:
-        cursor.execute('DELETE FROM customer_configurations WHERE name = ?', (name,))
+        cursor.execute('DELETE FROM customer_configurations WHERE LOWER(name) = LOWER(?)', (name,))
         conn.commit()
         return True
     except Exception as e:
