@@ -258,9 +258,10 @@ def init_db():
         company_id INTEGER NOT NULL,
         customer_id INTEGER NOT NULL,
         quote_json TEXT,
+        creation_date TEXT NOT NULL,
         FOREIGN KEY (company_id) REFERENCES company_configurations(id),
-        FOREIGN KEY (customer_id) REFERENCES customer_configurations(id),
-        creation_date TEXT NOT NULL
+        FOREIGN KEY (customer_id) REFERENCES customer_configurations(id)
+        
 );
 
     ''')
