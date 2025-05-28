@@ -14,7 +14,7 @@ def save_configuration(name, config):
 
     try:
         cursor.execute('''
-        INSERT OR REPLACE INTO configurations 
+        INSERT OR REPLACE INTO company_configurations 
         (name, company_name, company_address, company_phone, company_email, company_vat_code, 
         company_logo, terms, vat_rate, notes, prepared_by)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
@@ -50,7 +50,7 @@ def load_configuration(name):
         cursor.execute('''
         SELECT company_name, company_address, company_phone, company_email, company_vat_code,
                company_logo, terms, vat_rate, notes, prepared_by
-        FROM configurations
+        FROM company_configurations
         WHERE name = ?
         ''', (name,))
 
@@ -83,7 +83,7 @@ def get_configuration_names():
     cursor = conn.cursor()
 
     try:
-        cursor.execute('SELECT name FROM configurations ORDER BY name')
+        cursor.execute('SELECT name FROM company_configurations ORDER BY name')
         names = [row[0] for row in cursor.fetchall()]
         return names
     except Exception as e:
@@ -99,7 +99,7 @@ def delete_configuration(name):
     cursor = conn.cursor()
 
     try:
-        cursor.execute('DELETE FROM configurations WHERE name = ?', (name,))
+        cursor.execute('DELETE FROM company_configurations WHERE name = ?', (name,))
         conn.commit()
         return True
     except Exception as e:
@@ -218,7 +218,7 @@ def init_db():
 
     # Crea la tabella delle configurazioni se non esiste
     cursor.execute('''
-    CREATE TABLE IF NOT EXISTS configurations (
+    CREATE TABLE IF NOT EXISTS company_configurations (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         name TEXT UNIQUE NOT NULL,
         company_name TEXT NOT NULL,
@@ -247,6 +247,34 @@ def init_db():
     )
     ''')
 
+    # Abilito il supporto per le chiavi esterni in Sqlite3:
+    cursor.execute("PRAGMA foreign_keys = ON;")
+
+    # Crea la tabella dei preventivi di una data compagnia e di un dato cliente se non esiste
+    cursor.execute('''
+        CREATE TABLE quotes (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        quote_code VARCHAR(20) NOT NULL,
+        company_id INTEGER NOT NULL,
+        customer_id INTEGER NOT NULL,
+        quote_json TEXT,
+        FOREIGN KEY (company_id) REFERENCES company_configurations(id),
+        FOREIGN KEY (customer_id) REFERENCES customer_configurations(id)
+);
+
+    ''')
+
+    conn.commit()
+    conn.close()
+
+def save_quote_on_db(quote_code, company_id, customer_id, quote_json):
+    """Salva un preventivo su un database SQLite"""
+    conn = sqlite3.connect(DB_FILE_NAME)
+    cursor = conn.cursor()
+    cursor.execute('''
+        INSERT INTO quotes (quote_code, company_id, customer_id, quote_json)
+        VALUES (?, ?, ?, ?)
+    ''', (quote_code, company_id, customer_id, quote_json))
     conn.commit()
     conn.close()
 
@@ -430,7 +458,12 @@ def get_current_date():
     return datetime.now().strftime("%d/%m/%Y")
 
 def get_all_quote_codes():
-    return set()
+    conn = sqlite3.connect(DB_FILE_NAME)
+    cursor = conn.cursor()
+    cursor.execute("SELECT quote_code FROM quotes")
+    quote_codes = [row[0] for row in cursor.fetchall()]
+    conn.close()
+    return quote_codes
 
 def prepare_data_for_qr(data:dict):
     return {'customer_name': data.get('customer', {}).get('customer_name'), 'date': data.get('date', get_current_date()), 'quote_code': data.get('quote_code', genera_codice_random())}
