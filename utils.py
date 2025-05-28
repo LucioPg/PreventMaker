@@ -259,7 +259,8 @@ def init_db():
         customer_id INTEGER NOT NULL,
         quote_json TEXT,
         FOREIGN KEY (company_id) REFERENCES company_configurations(id),
-        FOREIGN KEY (customer_id) REFERENCES customer_configurations(id)
+        FOREIGN KEY (customer_id) REFERENCES customer_configurations(id),
+        creation_date TEXT NOT NULL
 );
 
     ''')
@@ -274,11 +275,12 @@ def save_quote_on_db(quote):
     company_id = _get_company_id_by_name(cursor, quote.get('company', {}).get('company_name'))
     customer_id = _get_customer_id_by_name(cursor, quote.get('customer', {}).get('customer_name'), quote.get('customer', {}).get('customer_email'))
     quote_code = quote.get('quote_code')
+    creation_date = format_date_for_db(quote.get('date'))
     quote_json = json.dumps(quote, indent=4, default=str)
     cursor.execute('''
-        INSERT INTO quotes (quote_code, company_id, customer_id, quote_json)
-        VALUES (?, ?, ?, ?)
-    ''', (quote_code, company_id, customer_id, quote_json))
+        INSERT INTO quotes (quote_code, company_id, customer_id, quote_json, creation_date)
+        VALUES (?, ?, ?, ?, ?)
+    ''', (quote_code, company_id, customer_id, quote_json, creation_date))
     conn.commit()
     conn.close()
 
@@ -492,3 +494,26 @@ def scrittura_pdf(output_path, data):
     # Salva il PDF finale
     with open(output_path, "wb") as f:
         data.write(f)
+
+
+def format_date_for_db(date_string):
+    """Converte una data dal formato italiano DD/MM/YYYY al formato ISO YYYY-MM-DD per il database"""
+    try:
+        # Parsing della data nel formato italiano
+        date_obj = datetime.strptime(date_string, '%d/%m/%Y')
+        # Conversione nel formato ISO
+        return date_obj.strftime('%Y-%m-%d')
+    except ValueError:
+        # Gestione errore in caso di formato non valido
+        return None
+
+def format_date_for_display(date_string):
+    """Converte una data dal formato ISO YYYY-MM-DD al formato italiano DD/MM/YYYY per visualizzazione"""
+    try:
+        # Parsing della data nel formato ISO
+        date_obj = datetime.strptime(date_string, '%Y-%m-%d')
+        # Conversione nel formato italiano
+        return date_obj.strftime('%d/%m/%Y')
+    except ValueError:
+        # Gestione errore in caso di formato non valido
+        return date_string
