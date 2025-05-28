@@ -1324,10 +1324,10 @@ class PreventMaker(QMainWindow, DialogWithIcon):
                 if new_note != old_nota:
                     self.config['notes'] = new_note
                     self.modified = True
-            QMessageBox.information(
-                self, "Nota Aggiunta",
-                "La nota è stata aggiunta al preventivo."
-            )
+                    QMessageBox.information(
+                        self, "Nota Aggiunta",
+                        "La nota è stata aggiunta al preventivo."
+                    )
 
     def loadConfiguration(self, name):
         """Carica una configurazione dal database"""
