@@ -3,7 +3,9 @@ import os
 import re
 import sqlite3
 from constants import DB_FILE_NAME, DEFAULT_NOTE
-
+import hashlib
+import base64
+from datetime import datetime
 
 def save_configuration(name, config):
     """Salva una configurazione nel database"""
@@ -13,7 +15,7 @@ def save_configuration(name, config):
     try:
         cursor.execute('''
         INSERT OR REPLACE INTO configurations 
-        (name, company_name, company_address, company_phone, company_email, company_vat, 
+        (name, company_name, company_address, company_phone, company_email, company_vat_code, 
         company_logo, terms, vat_rate, notes, prepared_by)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ''', (
@@ -22,7 +24,7 @@ def save_configuration(name, config):
             config.get('company_address', ''),
             config.get('company_phone', ''),
             config.get('company_email', ''),
-            config.get('company_vat', ''),
+            config.get('company_vat_code', ''),
             config.get('company_logo', ''),
             config.get('terms', ''),
             config.get('vat_rate', '22%'),
@@ -46,7 +48,7 @@ def load_configuration(name):
 
     try:
         cursor.execute('''
-        SELECT company_name, company_address, company_phone, company_email, company_vat,
+        SELECT company_name, company_address, company_phone, company_email, company_vat_code,
                company_logo, terms, vat_rate, notes, prepared_by
         FROM configurations
         WHERE name = ?
@@ -59,7 +61,7 @@ def load_configuration(name):
                 'company_address': row[1],
                 'company_phone': row[2],
                 'company_email': row[3],
-                'company_vat': row[4],
+                'company_vat_code': row[4],
                 'company_logo': row[5],
                 'terms': row[6],
                 'vat_rate': row[7],
@@ -115,7 +117,7 @@ def save_customer_configuration(name, config):
     try:
         cursor.execute('''
         INSERT OR REPLACE INTO customer_configurations 
-        (name, customer_name, customer_address, customer_phone, customer_email, customer_vat)
+        (name, customer_name, customer_address, customer_phone, customer_email, customer_vat_code)
         VALUES (?, ?, ?, ?, ?, ?)
         ''', (
             name,
@@ -123,7 +125,7 @@ def save_customer_configuration(name, config):
             config.get('customer_address', ''),
             config.get('customer_phone', ''),
             config.get('customer_email', ''),
-            config.get('customer_vat', '')
+            config.get('customer_vat_code', '')
         ))
 
         conn.commit()
@@ -142,7 +144,7 @@ def load_customer_configuration(name):
 
     try:
         cursor.execute('''
-        SELECT customer_name, customer_address, customer_phone, customer_email, customer_vat
+        SELECT customer_name, customer_address, customer_phone, customer_email, customer_vat_code
         FROM customer_configurations
         WHERE name = ?
         ''', (name,))
@@ -154,7 +156,7 @@ def load_customer_configuration(name):
                 'customer_address': row[1],
                 'customer_phone': row[2],
                 'customer_email': row[3],
-                'customer_vat': row[4]
+                'customer_vat_code': row[4]
             }
             return config
         return None
@@ -223,7 +225,7 @@ def init_db():
         company_address TEXT NOT NULL,
         company_phone TEXT NOT NULL,
         company_email TEXT NOT NULL,
-        company_vat TEXT NOT NULL,
+        company_vat_code TEXT NOT NULL,
         company_logo TEXT,
         terms TEXT,
         vat_rate TEXT,
@@ -241,7 +243,7 @@ def init_db():
         customer_address TEXT,
         customer_phone TEXT,
         customer_email TEXT NOT NULL,
-        customer_vat TEXT
+        customer_vat_code TEXT
     )
     ''')
 
@@ -297,3 +299,79 @@ def add_default_note(config: dict , name: str, address: str, email: str):
         return config
     else:
         raise ValueError(f"La configurazione non è un dizionario, f{type(config)}")
+
+def genera_codice_random(lunghezza=8):
+    """
+    Genera un codice alfanumerico casuale di lunghezza specificata.
+
+    Args:
+        lunghezza (int): Lunghezza del codice da generare. Default è 8.
+
+    Returns:
+        str: Codice alfanumerico casuale.
+    """
+    import random
+    import string
+    # Caratteri possibili (lettere maiuscole e numeri)
+    caratteri = string.ascii_uppercase + string.digits
+
+    # Generazione del codice
+
+    return 'random_'.join(random.choice(caratteri) for _ in range(lunghezza))
+
+
+def genera_codice(stringa, lunghezza=8, controlla_duplicati=False, codici_esistenti=None):
+    """
+    Genera un codice alfanumerico a lunghezza fissa utilizzando Base64.
+
+    Args:
+        stringa: La stringa di input
+        lunghezza: La lunghezza desiderata del codice (default: 8)
+        controlla_duplicati: Se verificare duplicati nei codici esistenti
+        codici_esistenti: Set di codici già generati
+
+    Returns:
+        Un codice alfanumerico di lunghezza fissa in formato Base64
+    """
+    if controlla_duplicati and codici_esistenti is None:
+        codici_esistenti = set()
+
+    # Genera un hash SHA-256 per aumentare l'entropia e avere un input di lunghezza costante
+    hash_input = hashlib.sha256(stringa.encode('utf-8')).digest()
+
+    # Codifica l'hash in Base64
+    codice_base64 = base64.b64encode(hash_input).decode('utf-8')
+
+    # Rimuovi caratteri non alfanumerici (+ e /) sostituendoli con caratteri alfanumerici
+    # In Base64 standard, + e / sono usati, mentre = è usato per il padding
+    codice_base64 = codice_base64.replace('+', 'A').replace('/', 'B').replace('=', '')
+
+    # Prendi i primi caratteri fino alla lunghezza desiderata
+    codice = codice_base64[:lunghezza]
+
+    # Se è attiva la verifica dei duplicati
+    if controlla_duplicati:
+        salt = 0
+        while codice in codici_esistenti:
+            # Aggiungi un salt e rigenera
+            salt_stringa = stringa + str(salt)
+            hash_salt = hashlib.sha256(salt_stringa.encode('utf-8')).digest()
+
+            codice_base64 = base64.b64encode(hash_salt).decode('utf-8')
+            codice_base64 = codice_base64.replace('+', 'A').replace('/', 'B').replace('=', '')
+            codice = codice_base64[:lunghezza]
+            salt += 1
+
+        codici_esistenti.add(codice)
+
+    return codice
+
+def get_current_date():
+    return datetime.now().strftime("%d/%m/%Y")
+
+def get_all_quote_codes():
+    return set()
+
+def prepare_data_for_qr(data:dict):
+    return {'customer_name': data.get('customer', {}).get('customer_name'), 'date': data.get('date', get_current_date()), 'quote_code': data.get('quote_code', genera_codice_random())}
+

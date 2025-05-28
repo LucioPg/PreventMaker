@@ -1,5 +1,6 @@
 import sys
 import os
+import json
 from functools import partial
 from PyQt6.QtGui import QIcon, QPixmap
 from PyQt6.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
@@ -15,17 +16,20 @@ from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, 
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib.units import mm, cm
 import tempfile
-
+from dotenv import load_dotenv
 from custom_events import ConfigReadyEvent
 from products_enums import ProductTableWidgetColumn, ProductTableWidget, ProductTableJsonFieldsNames
+from qcode import crea_qr_preventivo
 from utils import save_configuration, load_configuration, get_configuration_names, delete_configuration, \
     save_customer_configuration, load_customer_configuration, get_customer_configuration_names, \
     delete_customer_configuration, \
     delete_database, init_db, is_valid_email, is_valid_vat, is_valid_phone, _config_unchanged, add_default_note, \
-    get_formatted_note
+    get_formatted_note, genera_codice, get_all_quote_codes, get_current_date, prepare_data_for_qr
 
 from constants import *
 
+# Carica le variabili d'ambiente dal file .env
+load_dotenv()
 
 def dialog_with_icon(self, title, label, icon_path=None, default_text=""):
     """
@@ -152,7 +156,7 @@ class CompanyConfigWizard(QWizard):
             self.company_page.company_address.setPlainText(config.get('company_address', ''))
             self.company_page.company_phone.setText(config.get('company_phone', ''))
             self.company_page.company_email.setText(config.get('company_email', ''))
-            self.company_page.company_vat.setText(config.get('company_vat', ''))
+            self.company_page.company_vat_code.setText(config.get('company_vat_code', ''))
             self.company_page.logo_path.setText(config.get('company_logo', ''))
             config = add_default_note(config, config.get('company_name', ''), config.get('company_address', ''),
                                       config.get('company_email', ''))
@@ -176,7 +180,7 @@ class CompanyConfigWizard(QWizard):
             'company_address': self.field('company_address'),
             'company_phone': self.field('company_phone'),
             'company_email': self.field('company_email'),
-            'company_vat': self.field('company_vat'),
+            'company_vat_code': self.field('company_vat_code'),
             'company_logo': self.field('company_logo'),
             # Termini e condizioni
             'terms': self.field('terms'),
@@ -204,7 +208,7 @@ class CompanyPage(QWizardPage):
         self.company_address = QTextEdit()
         self.company_phone = QLineEdit()
         self.company_email = QLineEdit()
-        self.company_vat = QLineEdit()
+        self.company_vat_code = QLineEdit()
 
         # Logo
         logo_layout = QHBoxLayout()
@@ -220,7 +224,7 @@ class CompanyPage(QWizardPage):
         self.registerField('company_address*', self.company_address, 'plainText')
         self.registerField('company_phone*', self.company_phone)
         self.registerField('company_email*', self.company_email)
-        self.registerField('company_vat*', self.company_vat)
+        self.registerField('company_vat_code*', self.company_vat_code)
         self.registerField('company_logo', self.logo_path)
 
         # Aggiungi i campi al layout
@@ -228,7 +232,7 @@ class CompanyPage(QWizardPage):
         layout.addRow("Indirizzo (*):", self.company_address)
         layout.addRow("Telefono (*):", self.company_phone)
         layout.addRow("Email (*):", self.company_email)
-        layout.addRow("Partita IVA (*):", self.company_vat)
+        layout.addRow("Partita IVA (*):", self.company_vat_code)
         layout.addRow("Logo:", logo_layout)
 
         self.setLayout(layout)
@@ -240,7 +244,7 @@ class CompanyPage(QWizardPage):
                                 self.company_address.toPlainText(),
                                 self.company_phone.text(),
                                 self.company_email.text(),
-                                self.company_vat.text())
+                                self.company_vat_code.text())
 
     def _isComplete(self, name, address, phone, email, vat):
         """Verifica che tutti i campi obbligatori siano compilati"""
@@ -255,7 +259,7 @@ class CompanyPage(QWizardPage):
     def validatePage(self):
         """Valida i campi quando si tenta di passare alla pagina successiva"""
         self.validate_attempted = True
-        return self.validate(self.company_email.text(), self.company_phone.text(), self.company_vat.text())
+        return self.validate(self.company_email.text(), self.company_phone.text(), self.company_vat_code.text())
 
     def validate(self, email: str, phone: str, vat: str):
         if not is_valid_email(email):
@@ -306,21 +310,21 @@ class CustomerPage(QWizardPage):
         self.customer_address = QTextEdit()
         self.customer_phone = QLineEdit()
         self.customer_email = QLineEdit()
-        self.customer_vat = QLineEdit()
+        self.customer_vat_code = QLineEdit()
 
         # Registra i campi (con * per i campi obbligatori)
         self.registerField('customer_name*', self.customer_name)
         self.registerField('customer_address', self.customer_address, 'plainText')
         self.registerField('customer_phone', self.customer_phone)
         self.registerField('customer_email*', self.customer_email)
-        self.registerField('customer_vat', self.customer_vat)
+        self.registerField('customer_vat_code', self.customer_vat_code)
 
         # Aggiungi i campi al layout
         layout.addRow("Nome Cliente (*):", self.customer_name)
         layout.addRow("Indirizzo:", self.customer_address)
         layout.addRow("Telefono:", self.customer_phone)
         layout.addRow("Email (*):", self.customer_email)
-        layout.addRow("Partita IVA:", self.customer_vat)
+        layout.addRow("Partita IVA:", self.customer_vat_code)
 
         self.setLayout(layout)
 
@@ -339,7 +343,7 @@ class CustomerPage(QWizardPage):
     def validatePage(self):
         """Valida i campi quando si tenta di passare alla pagina successiva"""
         self.validate_attempted = True
-        return self.validate(self.customer_email.text(), self.customer_phone.text(), self.customer_vat.text())
+        return self.validate(self.customer_email.text(), self.customer_phone.text(), self.customer_vat_code.text())
 
     def validate(self, email: str, phone: str, vat: str):
         if not is_valid_email(email):
@@ -418,9 +422,10 @@ class ProductTable(QTableWidget):
 
     totalChanged = pyqtSignal(float, float, float)  # Segnale per totale netto, iva, totale ivato
 
-    def __init__(self, parent=None, labels=["Art.", "Descrizione", "Qnt", "P. U.",
-                                            "S. %", "IVA", "Valore"]):
+    def __init__(self, parent=None, labels=None):
         super().__init__(0, 7, parent)
+        if labels is None:
+            labels = ["Art.", "Descrizione", "Qnt", "P. U.", "S. %", "IVA", "Valore"]
         self.setHorizontalHeaderLabels(labels)
         self.labels = labels
         # Imposta le proporzioni delle colonne
@@ -634,7 +639,7 @@ class CustomerConfigWizard(QWizard):
         if config:
             self.customer_page.customer_name.setText(config.get("customer_name", ""))
             self.customer_page.customer_address.setText(config.get("customer_address", ""))
-            self.customer_page.customer_vat.setText(config.get("customer_vat", ""))
+            self.customer_page.customer_vat_code.setText(config.get("customer_vat_code", ""))
             self.customer_page.customer_email.setText(config.get("customer_email", ""))
             self.customer_page.customer_phone.setText(config.get("customer_phone", ""))
 
@@ -645,7 +650,7 @@ class CustomerConfigWizard(QWizard):
             'customer_address': self.field('customer_address'),
             'customer_phone': self.field('customer_phone'),
             'customer_email': self.field('customer_email'),
-            'customer_vat': self.field('customer_vat'),
+            'customer_vat_code': self.field('customer_vat_code'),
         }
 
     def on_finish(self):
@@ -1216,7 +1221,6 @@ class PreventMaker(QMainWindow):
         self.total_vat_label = QLabel("0.00 €")
         self.total_with_vat_label = QLabel("0.00 €")
 
-        # TODO AGGIUNGERE QUI LA DATA ??????????????????????????
         totals_layout.addRow("Totale Netto:", self.total_net_label)
         totals_layout.addRow("Totale IVA:", self.total_vat_label)
         totals_layout.addRow("Totale Ivato:", self.total_with_vat_label)
@@ -1368,7 +1372,7 @@ class PreventMaker(QMainWindow):
             'company_address': self.config.get('company_address', ''),
             'company_phone': self.config.get('company_phone', ''),
             'company_email': self.config.get('company_email', ''),
-            'company_vat': self.config.get('company_vat', ''),
+            'company_vat_code': self.config.get('company_vat_code', ''),
             'company_logo': self.config.get('company_logo', ''),
             'terms': self.config.get('terms', ''),
             'vat_rate': self.config.get('vat_rate', '22%'),
@@ -1424,6 +1428,24 @@ class PreventMaker(QMainWindow):
         elif not modified and title.endswith('*'):
             self.setWindowTitle(title[:-2])
 
+    def generate_qr(self, data: dict):
+        """Genera un QR code per il preventivo"""
+        # Crea un file temporaneo per il QR code
+        temp_dir = tempfile.gettempdir()
+        output_path = os.path.join(temp_dir, f"preventivo_qr_{data.get('quote_code')}.png")
+        # dati
+        data = prepare_data_for_qr(data)
+        password = os.getenv("CRYPT_PWD")
+        salt = os.getenv("CRYPT_SALT")
+        crea_qr_preventivo(data, password=password, salt=salt, nome_file=output_path)
+        return output_path
+
+    def get_totals(self):
+        total_net = float(self.total_net_label.text().replace(" €", ""))
+        total_vat = float(self.total_vat_label.text().replace(" €", ""))
+        total_with_vat = float(self.total_with_vat_label.text().replace(" €", ""))
+        return {'totals': {'net': total_net, 'vat': total_vat, 'total': total_with_vat}}
+
     def generatePDF(self, output_path=None):
         """Genera il PDF del preventivo"""
         # Se non è specificato un percorso di output, usa un file temporaneo
@@ -1443,23 +1465,43 @@ class PreventMaker(QMainWindow):
 
         # Stili
         styles = getSampleStyleSheet()
-        title_style = styles['Heading1']
         subtitle_style = styles['Heading2']
         normal_style = styles['Normal']
+        # Crea stili per il titolo e i dettagli
+        title_style = ParagraphStyle(
+            name='TitleStyle',
+            fontName='Helvetica-Bold',
+            fontSize=14,
+            alignment=1,  # 1 = centro
+            spaceAfter=2  # Spazio ridotto dopo il titolo
+        )
 
+        details_style = ParagraphStyle(
+            name='DetailsStyle',
+            fontName='Helvetica',  # Non in grassetto
+            fontSize=10,
+            alignment=1,  # 1 = centro
+            spaceAfter=5
+        )
+        # Preventivo
+        quote = self.generate_quote()
         # Elementi del documento
         elements = []
+        # Ottieni la data corrente nel formato italiano
 
         # Intestazione
-        if self.config:
+        if quote:
+            data_corrente = quote.get('date', get_current_date())
+            codice_preventivo = quote.get('quote_code')
+            company = quote.get('company')
+            customer = quote.get('customer')
             # Crea una tabella per l'intestazione con logo a sinistra e dati società a destra
             header_data = [[]]
-
             # Logo (se presente)
             logo_path = self.config.get('company_logo')
             if logo_path and os.path.exists(logo_path):
                 img = Image(logo_path)
-                img.drawHeight = 2 * cm
+                img.drawHeight = 4 * cm
                 img.drawWidth = 4 * cm
                 header_data[0].append(img)
             else:
@@ -1468,11 +1510,11 @@ class PreventMaker(QMainWindow):
 
             # Dati società
             company_info = []
-            company_info.append(Paragraph(f"<b>{self.config.get('company_name', '')}</b>", subtitle_style))
-            company_info.append(Paragraph(self.config.get('company_address', ''), normal_style))
-            company_info.append(Paragraph(f"Tel: {self.config.get('company_phone', '')}", normal_style))
-            company_info.append(Paragraph(f"Email: {self.config.get('company_email', '')}", normal_style))
-            company_info.append(Paragraph(f"P.IVA: {self.config.get('company_vat', '')}", normal_style))
+            company_info.append(Paragraph(f"<b>{company.get('company_name', '')}</b>", subtitle_style))
+            company_info.append(Paragraph(company.get('company_address', ''), normal_style))
+            company_info.append(Paragraph(f"Tel: {company.get('company_phone', '')}", normal_style))
+            company_info.append(Paragraph(f"Email: {company.get('company_email', '')}", normal_style))
+            company_info.append(Paragraph(f"P.IVA: {company.get('company_vat_code', '')}", normal_style))
 
             # Aggiungi i dati società alla tabella
             header_data[0].append(company_info)
@@ -1491,135 +1533,181 @@ class PreventMaker(QMainWindow):
 
             # Dati cliente
             elements.append(Paragraph("<b>Cliente:</b>", subtitle_style))
-            elements.append(Paragraph(self.customer_config.get('customer_name', ''), normal_style))
-            elements.append(Paragraph(self.customer_config.get('customer_address', ''), normal_style))
-            elements.append(Paragraph(f"Tel: {self.customer_config.get('customer_phone', '')}", normal_style))
-            elements.append(Paragraph(f"Email: {self.customer_config.get('customer_email', '')}", normal_style))
-            if self.customer_config.get('customer_vat'):
-                elements.append(Paragraph(f"P.IVA: {self.customer_config.get('customer_vat', '')}", normal_style))
+            elements.append(Paragraph(customer.get('customer_name', ''), normal_style))
+            elements.append(Paragraph(customer.get('customer_address', ''), normal_style))
+            elements.append(Paragraph(f"Tel: {customer.get('customer_phone', '')}", normal_style))
+            elements.append(Paragraph(f"Email: {customer.get('customer_email', '')}", normal_style))
+            if customer.get('customer_vat_code'):
+                elements.append(Paragraph(f"P.IVA: {customer.get('customer_vat_code', '')}", normal_style))
             elements.append(Spacer(1, 10 * mm))
 
-        # Titolo preventivo
-        elements.append(Paragraph("PREVENTIVO", title_style))
-        elements.append(Spacer(1, 5 * mm))
-
-        # Tabella prodotti
-        products = self.product_table.getProductsData()
-        if products:
-            # Intestazioni tabella
-            table_data = [self.product_table.labels]
-
-            # Dati prodotti
-            for product in products:
-                # Creare un Paragraph per la descrizione per permettere il wrapping del testo
-                description_paragraph = Paragraph(product['description'],
-                                                  ParagraphStyle('DescriptionStyle',
-                                                                 fontName='Helvetica',
-                                                                 fontSize=10,
-                                                                 leading=12))
-
-                table_data.append([
-                    product['code'],
-                    description_paragraph,
-                    str(product['quantity']),
-                    f"{product['unit_price']:.2f} €",
-                    f"{product['discount']:.2f}%",
-                    f"{int(product['vat_rate'])}",
-                    f"{product['net_total']:.2f} €"
-                ])
-            # Calcola le larghezze delle colonne dando priorità alla descrizione
-            # La colonna descrizione prenderà il 40% dello spazio disponibile
-            # Le altre colonne si divideranno lo spazio rimanente
-            table_width = doc.width
-            description_width = table_width * 0.4  # 40% per la colonna descrizione
-            other_columns_width = (
-                                              table_width - description_width) / 6  # Restante spazio diviso equamente tra le altre 6 colonne
-
-            col_widths = [other_columns_width,  # Codice Art.
-                          description_width,  # Descrizione (prioritaria)
-                          other_columns_width,  # Quantità
-                          other_columns_width,  # Prezzo Unit.
-                          other_columns_width,  # Sconto
-                          other_columns_width,  # IVA
-                          other_columns_width]  # Totale Netto
-
-            # Crea la tabella
-            table = Table(table_data, repeatRows=1, colWidths=col_widths)
-            table.setStyle(TableStyle([
-                ('BACKGROUND', (0, 0), (-1, 0), colors.grey),
-                ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
-                ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
-                ('ALIGN', (1, 0), (1, -1), 'LEFT'),  # Allinea a sinistra la colonna descrizione
-                ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),  # Allinea al centro verticalmente
-                ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-                ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
-                ('BACKGROUND', (0, 1), (-1, -1), colors.beige),
-                ('GRID', (0, 0), (-1, -1), 1, colors.black),
-                ('WORDWRAP', (1, 0), (1, -1), True)  # Abilita il ritorno a capo per la colonna descrizione
-
+            # Titolo preventivo
+            elements.append(Paragraph("PREVENTIVO", title_style))
+            elements.append(Paragraph(f"Data: {data_corrente} - Codice: {codice_preventivo}", details_style))
+            elements.append(Spacer(1, 5 * mm))
+    
+            # Tabella prodotti
+            products = self.product_table.getProductsData()
+            if products:
+                # Intestazioni tabella
+                table_data = [self.product_table.labels]
+    
+                # Dati prodotti
+                for product in products:
+                    # Creare un Paragraph per la descrizione per permettere il wrapping del testo
+                    description_paragraph = Paragraph(product['description'],
+                                                      ParagraphStyle('DescriptionStyle',
+                                                                     fontName='Helvetica',
+                                                                     fontSize=10,
+                                                                     leading=12))
+    
+                    table_data.append([
+                        product['code'],
+                        description_paragraph,
+                        str(product['quantity']),
+                        f"{product['unit_price']:.2f} €",
+                        f"{product['discount']:.2f}%",
+                        f"{int(product['vat_rate'])}",
+                        f"{product['net_total']:.2f} €"
+                    ])
+                # Calcola le larghezze delle colonne dando priorità alla descrizione
+                # La colonna descrizione prenderà il 40% dello spazio disponibile
+                # Le altre colonne si divideranno lo spazio rimanente
+                table_width = doc.width
+                description_width = table_width * 0.4  # 40% per la colonna descrizione
+                other_columns_width = (
+                                                  table_width - description_width) / 6  # Restante spazio diviso equamente tra le altre 6 colonne
+    
+                col_widths = [other_columns_width,  # Codice Art.
+                              description_width,  # Descrizione (prioritaria)
+                              other_columns_width,  # Quantità
+                              other_columns_width,  # Prezzo Unit.
+                              other_columns_width,  # Sconto
+                              other_columns_width,  # IVA
+                              other_columns_width]  # Totale Netto
+    
+                # Crea la tabella
+                table = Table(table_data, repeatRows=1, colWidths=col_widths)
+                table.setStyle(TableStyle([
+                    ('BACKGROUND', (0, 0), (-1, 0), colors.grey),
+                    ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
+                    ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+                    ('ALIGN', (1, 0), (1, -1), 'LEFT'),  # Allinea a sinistra la colonna descrizione
+                    ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),  # Allinea al centro verticalmente
+                    ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+                    ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
+                    ('BACKGROUND', (0, 1), (-1, -1), colors.beige),
+                    ('GRID', (0, 0), (-1, -1), 1, colors.black),
+                    ('WORDWRAP', (1, 0), (1, -1), True)  # Abilita il ritorno a capo per la colonna descrizione
+    
+                ]))
+    
+                elements.append(table)
+                elements.append(Spacer(1, 10 * mm))
+    
+            # Totali
+            totals = self.get_totals()
+            total_net = totals.get('totals', {}).get('net', 0)
+            total_vat = totals.get('totals', {}).get('vat', 0)
+            total_with_vat = totals.get('totals', {}).get('total', 0)
+    
+            elements.append(Paragraph(f"<b>Totale Netto:</b> {total_net:.2f} €", normal_style))
+            elements.append(Paragraph(f"<b>Totale IVA:</b> {total_vat:.2f} €", normal_style))
+            elements.append(Paragraph(f"<b>Totale Ivato:</b> {total_with_vat:.2f} €", normal_style))
+            elements.append(Spacer(1, 10 * mm))
+    
+            # Termini e condizioni
+            if self.config.get('terms'):
+                elements.append(Paragraph("<b>Termini e Condizioni:</b>", subtitle_style))
+                elements.append(Paragraph(self.config.get('terms', ''), normal_style))
+                elements.append(Spacer(1, 5 * mm))
+    
+            # Note
+            if self.config.get('notes'):
+                elements.append(Paragraph("<b>Note:</b>", subtitle_style))
+                elements.append(Paragraph(self.config.get('notes', ''), normal_style))
+                elements.append(Spacer(1, 5 * mm))
+    
+            # Preparato da
+            if self.config.get('prepared_by'):
+                elements.append(
+                    Paragraph(f"<i>Preventivo preparato da: {self.config.get('prepared_by', '')}</i>", normal_style))
+    
+            # Aggiungi spazio prima della firma
+            elements.append(Spacer(1, 20 * mm))
+    
+            # Aggiungi la sezione per la firma del cliente
+            signature_style = ParagraphStyle(
+                'Signature',
+                parent=normal_style,
+                alignment=1,  # Centered
+                fontSize=10
+            )
+    
+            # Testo per il preventivo e la firma
+            prev_text = f"Prev. # {codice_preventivo}"
+            firma_text = "Firma del Cliente"
+    
+            # Assumiamo che tu abbia un'immagine QR code già creata
+            qr_size = 60  # Dimensione del QR code in punti (regola secondo necessità)
+            qr_path = self.generate_qr(quote)
+            qr_code_image = Image(qr_path, width=qr_size, height=qr_size)
+    
+            # Calcola le larghezze delle colonne
+            prev_width = len(prev_text) * 7
+            firma_width = len(firma_text) * 7
+    
+            # Calcola la larghezza totale disponibile
+            total_width = doc.width
+    
+            # Calcola la larghezza della prima colonna vuota per spostare tutto a destra
+            # Lascia un po' di margine a destra (es. 5% della larghezza totale)
+            right_margin = total_width * 0.05
+            first_col_width = total_width - prev_width - firma_width - qr_size - right_margin
+    
+            # Crea una tabella con quattro colonne:
+            # - Prima colonna: vuota per creare spazio (sposta tutto a destra)
+            # - Seconda colonna: numero preventivo
+            # - Terza colonna: firma del cliente
+            # - Quarta colonna: QR code
+            table_data = [
+                ["", prev_text, firma_text, qr_code_image],
+                ["", "", "_" * len(firma_text), ""]
+            ]
+    
+            # Crea la tabella con le larghezze calcolate
+            signature_table = Table(table_data,
+                                    colWidths=[first_col_width, prev_width, firma_width, qr_size])
+    
+            # Imposta gli stili
+            signature_table.setStyle(TableStyle([
+                # Allineamento testo
+                ('ALIGN', (1, 0), (1, 0), 'LEFT'),  # Preventivo allineato a sinistra
+                ('ALIGN', (2, 0), (2, 1), 'CENTER'),  # Firma e linea centrate
+                ('ALIGN', (3, 0), (3, 0), 'CENTER'),  # QR code centrato
+    
+                # Allineamento verticale
+                ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+    
+                # Unisci le celle per il QR code (span verticale)
+                ('SPAN', (3, 0), (3, 1)),  # Il QR code occupa entrambe le righe
+    
+                # Spazio tra "Firma del Cliente" e la linea sottostante
+                ('TOPPADDING', (2, 1), (2, 1), 20),
+                ('BOTTOMPADDING', (2, 0), (2, 0), 5),
+    
+                # Nessun bordo
+                ('GRID', (0, 0), (-1, -1), 0, colors.white),
             ]))
-
-            elements.append(table)
-            elements.append(Spacer(1, 10 * mm))
-
-        # Totali
-        total_net = float(self.total_net_label.text().replace(" €", ""))
-        total_vat = float(self.total_vat_label.text().replace(" €", ""))
-        total_with_vat = float(self.total_with_vat_label.text().replace(" €", ""))
-
-        # TODO AGGIUNGERE QUI LA DATA ???????????????????????
-        elements.append(Paragraph(f"<b>Totale Netto:</b> {total_net:.2f} €", normal_style))
-        elements.append(Paragraph(f"<b>Totale IVA:</b> {total_vat:.2f} €", normal_style))
-        elements.append(Paragraph(f"<b>Totale Ivato:</b> {total_with_vat:.2f} €", normal_style))
-        elements.append(Spacer(1, 10 * mm))
-
-        # Termini e condizioni
-        if self.config.get('terms'):
-            elements.append(Paragraph("<b>Termini e Condizioni:</b>", subtitle_style))
-            elements.append(Paragraph(self.config.get('terms', ''), normal_style))
-            elements.append(Spacer(1, 5 * mm))
-
-        # Note
-        if self.config.get('notes'):
-            elements.append(Paragraph("<b>Note:</b>", subtitle_style))
-            elements.append(Paragraph(self.config.get('notes', ''), normal_style))
-            elements.append(Spacer(1, 5 * mm))
-
-        # Preparato da
-        if self.config.get('prepared_by'):
-            elements.append(
-                Paragraph(f"<i>Preventivo preparato da: {self.config.get('prepared_by', '')}</i>", normal_style))
-
-        # Aggiungi spazio prima della firma
-        elements.append(Spacer(1, 20 * mm))
-
-        # Aggiungi la sezione per la firma del cliente
-        signature_style = ParagraphStyle(
-            'Signature',
-            parent=normal_style,
-            alignment=1,  # Centered
-            fontSize=10
-        )
-
-        # Crea una tabella per la data e la firma
-        signature_data = [
-            ["Firma del cliente"],
-            ["", "____________________"]
-        ]
-
-        signature_table = Table(signature_data, colWidths=[doc.width / 2.0] * 2)
-        signature_table.setStyle(TableStyle([
-            ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
-            ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
-            ('TOPPADDING', (0, 1), (-1, 1), 15),  # Spazio per la firma
-        ]))
-
-        elements.append(signature_table)
-
-        # Genera il PDF
-        doc.build(elements)
-
-        return output_path
+    
+            elements.append(signature_table)
+    
+            # Genera il PDF
+            doc.build(elements)
+    
+            return output_path
+        else:
+            return None
 
     def checkConfigurationComplete(self):
         """Verifica che le configurazioni di società e cliente siano presenti"""
@@ -1642,7 +1730,7 @@ class PreventMaker(QMainWindow):
         # Verifica che ci siano i dati della società emittente
         if not (config.get('company_name') and config.get('company_address') and
                 config.get('company_phone') and config.get('company_email') and
-                config.get('company_vat')):
+                config.get('company_vat_code')):
             QMessageBox.warning(
                 self, "Dati Società Mancanti",
                 "I dati della società emittente sono incompleti. Completa la configurazione prima di procedere."
@@ -1668,8 +1756,9 @@ class PreventMaker(QMainWindow):
 
         try:
             pdf_path = self.generatePDF()
-            preview_dialog = PDFPreviewDialog(pdf_path, self)
-            preview_dialog.exec()
+            if pdf_path:
+                preview_dialog = PDFPreviewDialog(pdf_path, self)
+                preview_dialog.exec()
         except Exception as e:
             QMessageBox.critical(self, "Errore", f"Errore nella generazione dell'anteprima: {str(e)}")
 
@@ -1690,6 +1779,29 @@ class PreventMaker(QMainWindow):
             except Exception as e:
                 QMessageBox.critical(self, "Errore", f"Errore nell'esportazione: {str(e)}")
 
+    def generate_quote(self):
+        """Genera il preventivo."""
+        if self.checkConfigurationComplete():
+            try:
+
+                config = self.config.copy()
+                # Raccogli i dati del preventivo
+                totals = self.get_totals()
+
+                data = {
+                    'company': config,
+                    'customer': self.customer_config,
+                    'products': self.product_table.getProductsData(),
+                    'date': get_current_date(),
+                    **totals
+                }
+                data['quote_code'] = genera_codice(json.dumps(data, indent=4, default=str), controlla_duplicati=True, codici_esistenti=get_all_quote_codes())
+                return data
+            except Exception as e:
+                QMessageBox.critical(self, "Errore", f"Errore durante la generazione del preventivo: {str(e)}")
+                return None
+        return None
+
     def saveQuote(self):
         """Salva il preventivo nel database"""
         # Implementazione del salvataggio nel database # todo !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
@@ -1700,20 +1812,9 @@ class PreventMaker(QMainWindow):
 
         if file_path:
             try:
-                import json
-                config = self.config.copy()
-                config['customer'] = self.customer_config
-                # Raccogli i dati del preventivo
-                data = {
-                    'config': config,
-                    'products': self.product_table.getProductsData(),
-                    'totals': {
-                        'net': float(self.total_net_label.text().replace(" €", "")),
-                        'vat': float(self.total_vat_label.text().replace(" €", "")),
-                        'total': float(self.total_with_vat_label.text().replace(" €", ""))
-                    }
-                }
-
+                data = self.generate_quote()
+                if data is None:
+                    raise Exception("Errore durante la generazione del preventivo")
                 # Salva i dati
                 with open(file_path, 'w') as f:
                     json.dump(data, f, indent=4)
@@ -1745,17 +1846,13 @@ class PreventMaker(QMainWindow):
 
         if file_path:
             try:
-                import json
-
                 # Carica i dati
                 with open(file_path, 'r') as f:
                     data = json.load(f)
-
                 # Imposta la configurazione
-                self.customer_config = data.get('config', {}).get('customer', {})
+                self.customer_config = data.get('customer', {})
                 self.check_customer_config_is_complete(self.customer_config)
-                self.config = data.get('config', {})
-                self.config.pop('customer')
+                self.config = data.get('company', {})
                 self.check_company_config_is_complete(self.config)
                 self.updateHeaderLabels()
 

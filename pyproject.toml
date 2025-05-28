@@ -10,4 +10,10 @@ dependencies = [
     "pyqt6-webengine",
     "mysql-connector-python",
     "pyinstaller",
+    "qrcode>=8.2",
+    "cryptography>=45.0.3",
+    "opencv-python>=4.11.0.86",
+    "pyzbar>=0.1.9",
+    "notebook>=7.4.3",
+    "python-dotenv>=1.1.0",
 ]

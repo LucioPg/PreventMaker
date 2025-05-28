@@ -24,6 +24,12 @@ PreventMaker è un'applicazione per la creazione di preventivi con un'interfacci
    python preventmaker.py
    ```
 
+## Popolare il file .env
+Queste costanti sono la password e il salt per crittografare il qr che impedisce il disaccoppiamento
+delle pagine del preventivo
+CRYPT_SALT="example"
+CRYPT_PWD="password"
+
 ## Utilizzo dell'Applicazione
 
 ### Configurazione Iniziale

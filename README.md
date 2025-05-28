@@ -86,3 +86,37 @@ Il sistema di visualizzazione delle anteprime dei PDF è stato implementato util
 La classe `PDFPreviewDialog` gestisce la visualizzazione dell'anteprima, creando una finestra di dialogo modale che contiene il visualizzatore PDF. Il componente QWebEngineView è configurato per abilitare il supporto ai plugin e il visualizzatore PDF integrato.
 
 Questo sistema consente agli utenti di verificare l'aspetto finale del preventivo prima di salvarlo o esportarlo, garantendo che il documento rispetti le aspettative in termini di formattazione e contenuto.
+
+
+## Generazione codici del preventivo
+### Considerazione sui bit per carattere
+1. **Solo caratteri esadecimali (0-9, a-f)**: 4 bit per carattere
+2. **Caratteri alfanumerici (0-9, a-z, A-Z)**: ~5,95 bit per carattere
+3. **Base64 (0-9, a-z, A-Z, + e /)**: 6 bit esatti per carattere
+alla luce di questa considerazione il sistema più sicuro è rappresentato codici Base64
+
+### Implementazione scelta
+1. **Utilizza Base64** - Che fornisce un alfabeto di 64 caratteri (A-Z, a-z, 0-9, + e /), permettendo di codificare 6 bit di informazione per carattere.
+2. **Rimozione dei caratteri speciali** - Sostituisce i caratteri non alfanumerici di Base64 (+ e /) con caratteri alfanumerici per garantire che il codice contenga solo lettere e numeri.
+3. **Controllo dei duplicati** - Include un meccanismo opzionale per verificare ed evitare duplicati aggiungendo un "salt" incrementale.
+4. **Entropia elevata** - Usa SHA-256 prima della codifica Base64 per garantire una distribuzione uniforme anche con input simili.
+
+### Formula matematica di base
+Se prendiamo un hash con output di `n` bit e lo tronchiamo a `k` bit, la probabilità di collisione dopo aver generato `m` hash diversi è approssimativamente:
+P(collisione) ≈ 1 - e^(-m²/2^(k+1))
+### Calcoli concreti per diversi scenari
+Vediamo alcuni esempi pratici con hash alfanumerici (consideriamo 6 bit per carattere alfanumerico):
+#### Per un codice di 8 caratteri (48 bit):
+- Con 1.000 codici: probabilità di collisione ≈ 0,000004%
+- Con 100.000 codici: probabilità di collisione ≈ 0,04%
+- Con 1.000.000 codici: probabilità di collisione ≈ 3,9%
+
+#### Per un codice di 6 caratteri (36 bit):
+- Con 1.000 codici: probabilità di collisione ≈ 0,001%
+- Con 100.000 codici: probabilità di collisione ≈ 10%
+- Con 1.000.000 codici: probabilità di collisione ≈ 63%
+
+#### Per un codice di 4 caratteri (24 bit):
+- Con 1.000 codici: probabilità di collisione ≈ 3%
+- Con 10.000 codici: probabilità di collisione ≈ 27%
+- Con 100.000 codici: probabilità di collisione ≈ 95%

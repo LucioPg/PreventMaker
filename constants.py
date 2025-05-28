@@ -1,3 +1,4 @@
+
 COMPANY_ICON_PATH = "./icons/company_icon.png"
 CUSTOMER_ICON_PATH = "./icons/customer_icon.png"
 APP_ICON_PATH = "./icons/PreventMaker.ico"
