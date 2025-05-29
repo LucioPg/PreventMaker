@@ -2126,7 +2126,7 @@ def main():
             font-weight: bold;
         }
     """)
-    app_icon = QIcon("./icons/PreventMaker.ico")  # Formato .ico per Windows
+    app_icon = QIcon(resource_path(LOGO))  # Formato .ico per Windows
     app.setWindowIcon(app_icon)
 
     # Crea e mostra lo splash screen

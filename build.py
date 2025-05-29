@@ -2,7 +2,7 @@ import os
 import sys
 import subprocess
 from pathlib import Path
-
+from pyinstaller_utils import resource_path
 
 def build_executable():
     """
@@ -18,28 +18,7 @@ def build_executable():
         subprocess.check_call([sys.executable, "-m", "pip", "install", "pyinstaller"])
 
     # Define icon path
-    icon_path = os.path.join(os.getcwd(), "icons", "PreventMaker.ico")
-    if not os.path.exists(icon_path):
-        print(f"Warning: Icon file not found at {icon_path}")
-        raise Exception("Icon file not found.")
-        icon_path = "NONE"
-    else:
-        # Replace backslashes with forward slashes to avoid escape character issues
-        icon_path = icon_path.replace("\\", "\\\\")
-
-    # # Create data files list for PyInstaller
-    # datas = [
-    #     ("icons/*.ico", "icons"),
-    #     ("icons/*.png", "icons"),
-    #     # (numpy_core_dir + '\\*.dll', 'numpy\\core'),
-    #     # (numpy_core_dir + '\\*.pyd', 'numpy\\core')
-    # ]
-    #
-    # # Convert datas to string format for spec file
-    # datas_str = str(datas).replace("'", "\"")
-
-    all_resources = []
-
+    icon_path = resource_path("icons/PreventMaker.ico").replace("\\", "/")
     icons_folder = os.path.join(os.getcwd(), 'icons')
     resources_list = []
 
