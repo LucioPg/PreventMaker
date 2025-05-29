@@ -769,7 +769,8 @@ class ConfigManagerDialog(QDialog, DialogWithIcon):
     def load_configurations(self):
         """Carica la lista delle configurazioni dal database"""
         self.config_list.clear()
-        names = [name.lower() for name in get_configuration_names()]
+        # names = [name.lower() for name in get_configuration_names()]
+        names = get_configuration_names()
         for name in names:
             self.config_list.addItem(name)
 
@@ -970,7 +971,8 @@ class CustomerConfigManagerDialog(QDialog, DialogWithIcon):
     def load_configurations(self):
         """Carica la lista delle configurazioni dal database"""
         self.config_list.clear()
-        names = [name.lower() for name in get_customer_configuration_names()]
+        # names = [name.lower() for name in get_customer_configuration_names()]
+        names = get_customer_configuration_names()
         # Ordina i nomi in ordine alfabetico
         names.sort()
         for name in names:
