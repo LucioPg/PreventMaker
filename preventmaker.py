@@ -2128,7 +2128,7 @@ def main():
     app.setWindowIcon(app_icon)
 
     # Crea e mostra lo splash screen
-    splash_pixmap = QPixmap("./icons/PreventMaker_logo.png")  # Sostituisci con il percorso del tuo logo
+    splash_pixmap = QPixmap(LOGO)  # Sostituisci con il percorso del tuo logo
     splash = QSplashScreen(splash_pixmap, Qt.WindowType.WindowStaysOnTopHint)
     hide_splash = partial(_hide_splash, splash)
     splash.show()

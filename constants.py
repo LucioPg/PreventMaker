@@ -1,7 +1,9 @@
+from pyinstaller_utils import resource_path
 
-COMPANY_ICON_PATH = "./icons/company_icon.png"
-CUSTOMER_ICON_PATH = "./icons/customer_icon.png"
-APP_ICON_PATH = "./icons/PreventMaker.ico"
+COMPANY_ICON_PATH = resource_path("./icons/company_icon.png")
+CUSTOMER_ICON_PATH = resource_path("./icons/customer_icon.png")
+APP_ICON_PATH = resource_path("./icons/PreventMaker.ico")
+LOGO = resource_path("./icons/PreventMaker_logo.png")
 DB_FILE_NAME = "preventmaker.db"
 CUSTOMER_STYLESHEET = """            QWizard {
                 background-color: #e6ffe6;  /* Colore verdino chiaro */

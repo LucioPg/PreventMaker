@@ -4,17 +4,6 @@ import subprocess
 from pathlib import Path
 
 
-def resource_path(relative_path):
-    """ Get absolute path to resource, works for dev and for PyInstaller """
-    try:
-        # PyInstaller creates a temp folder and stores path in _MEIPASS
-        base_path = sys._MEIPASS
-    except Exception:
-        base_path = os.path.abspath(".")
-
-    return os.path.join(base_path, relative_path)
-
-
 def build_executable():
     """
     Build the executable using PyInstaller for Windows 11
@@ -32,22 +21,36 @@ def build_executable():
     icon_path = os.path.join(os.getcwd(), "icons", "PreventMaker.ico")
     if not os.path.exists(icon_path):
         print(f"Warning: Icon file not found at {icon_path}")
+        raise Exception("Icon file not found.")
         icon_path = "NONE"
     else:
         # Replace backslashes with forward slashes to avoid escape character issues
-        icon_path = icon_path.replace("\\", "/")
+        icon_path = icon_path.replace("\\", "\\\\")
 
-    # Create data files list for PyInstaller
-    datas = [
-        ("icons/*.ico", "icons"),
-        ("icons/*.png", "icons"),
-        # (numpy_core_dir + '\\*.dll', 'numpy\\core'),
-        # (numpy_core_dir + '\\*.pyd', 'numpy\\core')
-    ]
+    # # Create data files list for PyInstaller
+    # datas = [
+    #     ("icons/*.ico", "icons"),
+    #     ("icons/*.png", "icons"),
+    #     # (numpy_core_dir + '\\*.dll', 'numpy\\core'),
+    #     # (numpy_core_dir + '\\*.pyd', 'numpy\\core')
+    # ]
+    #
+    # # Convert datas to string format for spec file
+    # datas_str = str(datas).replace("'", "\"")
 
-    # Convert datas to string format for spec file
-    datas_str = str(datas).replace("'", "\"")
+    all_resources = []
 
+    icons_folder = os.path.join(os.getcwd(), 'icons')
+    resources_list = []
+
+    # Aggiungi tutte le icone dalla cartella 'icons'
+    if os.path.exists(icons_folder):
+        for file in os.listdir(icons_folder):
+            file_path = os.path.join(icons_folder, file)
+            if os.path.isfile(file_path) and file.endswith(('.ico', '.png', '.jpg', '.svg')):
+                # Formato (percorso_origine, percorso_destinazione)
+                resources_list.append((file_path, 'icons'))
+    datas_str = str(resources_list).replace("'", "\"")
     # Create a temporary spec file
     spec_content = f"""
 # -*- mode: python ; coding: utf-8 -*-
@@ -127,7 +130,7 @@ exe = EXE(
         "PyInstaller",
         "preventmaker.spec",
         "--clean",
-        "--noconfirm",
+        "--noconfirm"
         # Note: --windowed and --uac-admin options are now defined in the spec file
     ]
 

@@ -518,3 +518,4 @@ def format_date_for_display(date_string):
     except ValueError:
         # Gestione errore in caso di formato non valido
         return date_string
+
